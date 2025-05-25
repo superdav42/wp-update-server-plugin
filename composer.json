@@ -1,0 +1,19 @@
+{
+    "name": "devstone/wp-update-server-plugin",
+    "url": "https://wpmultisitewaas.org",
+    "description": "Create an update server with Woocommerce downloadable products.",
+    "version": "1.0.0",
+    "authors": [
+        {
+            "name": "David Stone",
+            "homepage": "https://github.com/superdav42"
+        }
+    ],
+    "license": [
+        "GPL-3.0-or-later"
+    ],
+    "type": "wordpress-plugin",
+    "require": {
+        "yahnis-elsts/wp-update-server": "^2.0"
+    }
+}
