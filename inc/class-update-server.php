@@ -14,9 +14,9 @@ class Update_Server extends \Wpup_UpdateServer {
 	protected function generateDownloadUrl(\Wpup_Package $package) {
 		$user_id = apply_filters('determine_current_user', null);
 		if ($user_id) {
-			$download_url = $this->getDownloadUrlForUser( $user_id, $package->slug );
+			$download_url = $this->getDownloadUrlForUser($user_id, $package->slug);
 			if ($download_url) {
-				return self::addQueryArg(['XDEBUG_SESSION' => 'XDEBUG_ECLIPSE'], $download_url);
+				return $download_url;
 			}
 		}
 		$query = [
@@ -50,7 +50,7 @@ class Update_Server extends \Wpup_UpdateServer {
 			return null; // Product not downloadable or invalid
 		}
 
-		// Check if the current user has valid purchase history for this product
+		// Check if the current user has valid purchase history for this product.
 		$customer_orders = wc_get_orders(array(
 			'limit' => -1,
 			'customer_id' => $user_id,
@@ -62,7 +62,13 @@ class Update_Server extends \Wpup_UpdateServer {
 				$item_product = $item->get_product();
 				if ($item_product && $item_product->get_sku() === $slug) {
 					$downloads = $item->get_item_downloads();
-					$download  = reset($downloads);
+					uasort(
+						$downloads,
+						function ($a, $b) {
+							return version_compare(substr(strrchr($a['name'], '-'), 1), substr(strrchr($b['name'], '-'), 1));
+						}
+					);
+					$download = end($downloads);
 					if ($download) {
 						return $download['download_url'];
 					}

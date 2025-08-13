@@ -8,5 +8,9 @@ Author: David Stone
 require_once __DIR__ . '/vendor/yahnis-elsts/wp-update-server/loader.php';
 require_once __DIR__ . '/inc/class-update-server.php';
 require_once __DIR__ . '/inc/class-request-endpoint.php';
+require_once __DIR__ . '/inc/class-product-icon.php';
+require_once __DIR__ . '/inc/class-store-api.php';
 
 $wp_update_server_plugin_request_endpoint = new \WP_Update_Server_Plugin\Request_Endpoint();
+$wp_update_server_plugin_product_icon     = new \WP_Update_Server_Plugin\Product_Icon();
+$wp_update_server_plugin_store_api        = new \WP_Update_Server_Plugin\Store_Api();
