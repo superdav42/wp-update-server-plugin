@@ -90,6 +90,7 @@ class Update_Server extends \Wpup_UpdateServer {
 				$filepath = $file_info['file_path'];
 
 				if ( $file_info['remote_file'] ) {
+					require_once ABSPATH . 'wp-admin/includes/file.php';
 					$tmp = wp_tempnam($file['name']);
 					file_put_contents($tmp, file_get_contents($filepath));
 					$filepath = $tmp;
