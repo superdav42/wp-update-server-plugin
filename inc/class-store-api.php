@@ -10,6 +10,8 @@ class Store_Api {
 	public function __construct() {
 		add_action('rest_api_init', array($this, 'register_product_icon_data'));
 		add_filter('woocommerce_rest_prepare_product_object', array($this, 'add_product_icon_to_api'), 10, 3);
+		add_filter('woocommerce_product_data_store_cpt_get_products_query', array($this, 'modify_subscription_query'), 10, 3);
+		add_action('pre_get_posts', array($this, 'modify_store_api_subscription_query'), 10);
 	}
 
 	/**
@@ -180,5 +182,123 @@ class Store_Api {
 	private function is_legacy_product_by_id($product_id) {
 		$legacy_meta = get_post_meta($product_id, '_is_legacy', true);
 		return 'yes' === $legacy_meta  || '1' === $legacy_meta;
+	}
+
+	/**
+	 * Modify product query to include simple products with subscriptions when type=subscription is requested.
+	 *
+	 * @param array $wp_query_args WP_Query arguments.
+	 * @param array $query_vars    Query variables from wc_get_products().
+	 * @param mixed $data_store    The data store instance.
+	 * @return array Modified WP_Query arguments.
+	 */
+	public function modify_subscription_query($wp_query_args, $query_vars, $data_store) {
+		// Check if type=subscription is requested
+		if (isset($query_vars['type']) && $query_vars['type'] === 'subscription') {
+			// Change the tax_query to look for 'simple' product type instead of 'subscription'
+			// since we now use simple products that are converted to subscriptions via
+			// WooCommerce All Products for Subscriptions
+			if (isset($wp_query_args['tax_query'])) {
+				foreach ($wp_query_args['tax_query'] as $key => $tax_query) {
+					if (isset($tax_query['taxonomy']) && $tax_query['taxonomy'] === 'product_type'
+					    && isset($tax_query['terms']) && $tax_query['terms'] === 'subscription') {
+						$wp_query_args['tax_query'][$key]['terms'] = 'simple';
+					}
+				}
+			}
+
+			// Add meta query to filter only products that have subscription schemes
+			// and exclude products where subscriptions are disabled
+			if (!isset($wp_query_args['meta_query'])) {
+				$wp_query_args['meta_query'] = array();
+			}
+
+			// The WooCommerce All Products for Subscriptions plugin uses:
+			// - _wcsatt_schemes: Contains the subscription schemes data
+			// - _wcsatt_schemes_status: Can be 'inherit', 'override', or 'disable'
+			$wp_query_args['meta_query'][] = array(
+				'relation' => 'AND',
+				array(
+					'key'     => '_wcsatt_schemes',
+					'compare' => 'EXISTS',
+				),
+				array(
+					'key'     => '_wcsatt_schemes_status',
+					'value'   => 'disable',
+					'compare' => '!=',
+				),
+			);
+		}
+
+		return $wp_query_args;
+	}
+
+	/**
+	 * Modify Store API queries to include simple products with subscriptions when type=subscription is requested.
+	 *
+	 * @param \WP_Query $query The WP_Query instance.
+	 */
+	public function modify_store_api_subscription_query($query) {
+		// Only modify product queries from the Store API
+		if (!defined('REST_REQUEST') || !REST_REQUEST) {
+			return;
+		}
+
+		// Check if this is a product query
+		$post_type = $query->get('post_type');
+		if ($post_type !== 'product') {
+			return;
+		}
+
+		// Check if there's a tax_query filtering by product_type
+		$tax_query = $query->get('tax_query');
+		if (empty($tax_query) || !is_array($tax_query)) {
+			return;
+		}
+
+		// Look for subscription type query and modify it
+		$modified = false;
+		foreach ($tax_query as $key => $tax_query_item) {
+			if (isset($tax_query_item['taxonomy']) && $tax_query_item['taxonomy'] === 'product_type'
+			    && isset($tax_query_item['terms']) && $tax_query_item['terms'] === 'subscription') {
+				// Change subscription to simple
+				$tax_query[$key]['terms'] = 'simple';
+				$modified = true;
+				break;
+			}
+		}
+
+		// Only modify the query if we found a subscription type filter
+		if (!$modified) {
+			return;
+		}
+
+		// Update the tax_query
+		$query->set('tax_query', $tax_query);
+
+		// Add meta_query to exclude products where subscriptions are explicitly disabled
+		$meta_query = $query->get('meta_query');
+		if (empty($meta_query)) {
+			$meta_query = array();
+		}
+
+		// The WooCommerce All Products for Subscriptions plugin uses:
+		// - _wcsatt_schemes_status: Can be 'inherit', 'override', or 'disable'
+		// - When not set or set to 'inherit', the product uses global subscription plans
+		// - Only exclude products where status is explicitly set to 'disable'
+		$meta_query[] = array(
+			'relation' => 'OR',
+			array(
+				'key'     => '_wcsatt_schemes_status',
+				'compare' => 'NOT EXISTS',
+			),
+			array(
+				'key'     => '_wcsatt_schemes_status',
+				'value'   => 'disable',
+				'compare' => '!=',
+			),
+		);
+
+		$query->set('meta_query', $meta_query);
 	}
 }
