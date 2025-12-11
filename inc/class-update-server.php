@@ -1,7 +1,17 @@
 <?php
+/**
+ * Update server class.
+ *
+ * @package WP_Update_Server_Plugin
+ */
 
 namespace WP_Update_Server_Plugin;
 
+use Automattic\WooCommerce\Proxies\LegacyProxy;
+
+/**
+ * Update server class.
+ */
 class Update_Server extends \Wpup_UpdateServer {
 
 	/**
@@ -20,42 +30,51 @@ class Update_Server extends \Wpup_UpdateServer {
 			}
 		}
 		$query = [
-			'update_action'  => 'download',
-			'update_slug'    => $package->slug,
+			'update_action' => 'download',
+			'update_slug'   => $package->slug,
 		];
 
 		return self::addQueryArg($query, $this->serverUrl);
 	}
 
+	/**
+	 * Retrieves the download URL for a specific user and product specified by its SKU.
+	 *
+	 * @param int $user_id The ID of the user for whom the download URL is being retrieved.
+	 * @param string $slug The SKU identifying the product for which the download URL is needed.
+	 *
+	 * @return string|null The download URL if available, or null if no valid downloads are found.
+	 */
 	protected function getDownloadUrlForUser($user_id, $slug) {
+		/** @var \WC_Product_Data_Store_Interface $product_data_store */
+		$product_data_store = wc_get_container()->get(LegacyProxy::class)->get_instance_of(\WC_Data_Store::class, 'product');
+		$product_id         = $product_data_store->get_product_id_by_sku($slug);
 
-		// Find downloadable product by SKU ($slug)
-		$args = [
-			'post_type'      => 'product',
-			'posts_per_page' => 1,
-			'meta_key'       => '_sku',
-			'meta_value'     => $slug,
-			'meta_compare'   => '='
-		];
-		$product_query = new \WP_Query($args);
+		/** @var \WC_Customer_Download_Data_Store $downloads_data_store */
+		$downloads_data_store = wc_get_container()->get(LegacyProxy::class)->get_instance_of(\WC_Data_Store::class, 'customer-download');
 
-		if (empty($product_query->posts)) {
-			return null; // No product found with this slug
-		}
+		$permissions = $downloads_data_store->get_downloads(
+			array(
+				'product_id' => $product_id,
+				'user_id'    => $user_id,
+			)
+		);
 
-		$product_id = $product_query->posts[0]->ID;
-		$product = wc_get_product($product_id);
-
-		if (!$product || !$product->is_downloadable()) {
-			return null; // Product not downloadable or invalid
+		if ( ! empty($permissions) ) {
+			foreach ( $permissions as $permission ) {
+				/** @var \WC_Customer_Download $permission */
+				return Store_Api::get_download_url($permission);
+			}
 		}
 
 		// Check if the current user has valid purchase history for this product.
-		$customer_orders = wc_get_orders(array(
-			'limit' => -1,
-			'customer_id' => $user_id,
-			'status' => array('wc-completed'), // Only completed orders
-		));
+		$customer_orders = wc_get_orders(
+			array(
+				'limit'       => -1,
+				'customer_id' => $user_id,
+				'status'      => array('wc-completed'), // Only completed orders
+			)
+		);
 
 		foreach ($customer_orders as $order) {
 			foreach ($order->get_items() as $item) {
@@ -77,6 +96,14 @@ class Update_Server extends \Wpup_UpdateServer {
 		}
 		return null;
 	}
+
+	/**
+	 * Finds the most recent package associated with a given product slug.
+	 *
+	 * @param string $slug The product slug to search for the package.
+	 *
+	 * @return \Wpup_Package|null The latest package if found, otherwise null.
+	 */
 	protected function findPackage($slug) {
 		$product_id = wc_get_product_id_by_sku($slug);
 		$product    = wc_get_product($product_id);
@@ -84,10 +111,9 @@ class Update_Server extends \Wpup_UpdateServer {
 		$latest_version = null;
 		if ($product && $product->exists() && $product->is_downloadable()) {
 			$files = $product->get_downloads();
-			foreach($files as $file_id => $file) {
-
+			foreach ($files as $file_id => $file) {
 				$file_info = \WC_Download_Handler::parse_file_path($product->get_file_download_path($file_id));
-				$filepath = $file_info['file_path'];
+				$filepath  = $file_info['file_path'];
 
 				if ( $file_info['remote_file'] ) {
 					require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -101,7 +127,7 @@ class Update_Server extends \Wpup_UpdateServer {
 					$package = call_user_func($this->packageFileLoader, $filepath, $slug, $this->cache);
 				}
 
-				if (empty($latest_version) || version_compare($package->getMetadata()['version'], $latest_version->getMetadata()['version'], '>' )) {
+				if (empty($latest_version) || version_compare($package->getMetadata()['version'], $latest_version->getMetadata()['version'], '>')) {
 					$latest_version = $package;
 				}
 			}
@@ -109,6 +135,13 @@ class Update_Server extends \Wpup_UpdateServer {
 		return $latest_version;
 	}
 
+	/**
+	 * Handles the download action for a package request.
+	 *
+	 * @param \Wpup_Request $request The request object containing package details.
+	 *
+	 * @return void
+	 */
 	protected function actionDownload(\Wpup_Request $request) {
 		$package = $request->package;
 		$user_id = apply_filters('determine_current_user', null);

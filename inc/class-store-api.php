@@ -1,9 +1,20 @@
 <?php
-
+/**
+ * Store API integration.
+ */
 namespace WP_Update_Server_Plugin;
 
+use Automattic\WooCommerce\Proxies\LegacyProxy;
+
+/**
+ * Class Store_Api
+ *
+ * Handles the integration and customization of WooCommerce Store API functionalities,
+ * including product metadata and specific query modifications.
+ */
 class Store_Api {
 
+	private $downloads_data_store;
 	/**
 	 * Initialize the store API functionality.
 	 */
@@ -12,6 +23,7 @@ class Store_Api {
 		add_filter('woocommerce_rest_prepare_product_object', array($this, 'add_product_icon_to_api'), 10, 3);
 		add_filter('woocommerce_product_data_store_cpt_get_products_query', array($this, 'modify_subscription_query'), 10, 3);
 		add_action('pre_get_posts', array($this, 'modify_store_api_subscription_query'), 10);
+		$this->downloads_data_store = wc_get_container()->get(LegacyProxy::class)->get_instance_of(\WC_Data_Store::class, 'customer-download');
 	}
 
 	/**
@@ -49,37 +61,32 @@ class Store_Api {
 
 		$download_url = '';
 		if ($user_id) {
-			// Check if the current user has valid purchase history for this product
-			$customer_orders = wc_get_orders(array(
-				'limit'       => - 1,
-				'customer_id' => $user_id,
-				'status'      => array('wc-completed'), // Only completed orders
-			));
+			$permissions = $this->downloads_data_store->get_downloads(
+				array(
+					'product_id' => $product_id,
+					'user_id'    => $user_id,
+				)
+			);
 
-			foreach ($customer_orders as $order) {
-				foreach ($order->get_items() as $item) {
-					$item_product = $item->get_product();
-					if ($item_product && $item_product->get_sku() === $product->get_sku()) {
-						$downloads = $item->get_item_downloads();
-						$download  = reset($downloads);
-						if ($download) {
-							$download_url = $download['download_url'];
-						}
-					}
+			if ( ! empty($permissions) ) {
+				foreach ( $permissions as $permission ) {
+					/** @var \WC_Customer_Download $permission */
+					$download_url = self::get_download_url($permission);
+					break;
 				}
 			}
 		}
 
 		return array(
-			'author' => [
+			'author'          => [
 				'display_name' => 'David Stone',
 			],
-			'download_url' => $download_url,
-			'icon' => $icon_full_url,
-			'beta' => $this->is_beta_product_by_id($product_id),
-			'legacy' => $this->is_legacy_product_by_id($product_id),
-			'tested_up_to' => get_post_meta($product_id, '_tested_up_to', true),
-			'requires' => get_post_meta($product_id, '_requires_wp', true),
+			'download_url'    => $download_url,
+			'icon'            => $icon_full_url,
+			'beta'            => $this->is_beta_product_by_id($product_id),
+			'legacy'          => $this->is_legacy_product_by_id($product_id),
+			'tested_up_to'    => get_post_meta($product_id, '_tested_up_to', true),
+			'requires'        => get_post_meta($product_id, '_requires_wp', true),
 			'active_installs' => get_post_meta($product_id, '_active_installs', true),
 		);
 	}
@@ -91,32 +98,32 @@ class Store_Api {
 	 */
 	public function get_product_icon_schema() {
 		return array(
-			'icon' => array(
+			'icon'            => array(
 				'description' => __('Full size icon URL.', 'wp-update-server-plugin'),
 				'type'        => 'string',
 				'format'      => 'uri',
 				'context'     => array('view'),
 				'readonly'    => true,
 			),
-			'beta' => array(
+			'beta'            => array(
 				'description' => __('Whether the product is marked as beta.', 'wp-update-server-plugin'),
 				'type'        => 'boolean',
 				'context'     => array('view'),
 				'readonly'    => true,
 			),
-			'legacy' => array(
+			'legacy'          => array(
 				'description' => __('Whether the product is marked as legacy.', 'wp-update-server-plugin'),
 				'type'        => 'boolean',
 				'context'     => array('view'),
 				'readonly'    => true,
 			),
-			'tested_up_to' => array(
+			'tested_up_to'    => array(
 				'description' => __('WordPress version the product has been tested up to.', 'wp-update-server-plugin'),
 				'type'        => 'string',
 				'context'     => array('view'),
 				'readonly'    => true,
 			),
-			'requires' => array(
+			'requires'        => array(
 				'description' => __('Minimum WordPress version required.', 'wp-update-server-plugin'),
 				'type'        => 'string',
 				'context'     => array('view'),
@@ -140,23 +147,24 @@ class Store_Api {
 	 * @return \WP_REST_Response
 	 */
 	public function add_product_icon_to_api($response, $product, $request) {
-		$icon_url = Product_Icon::get_product_icon($product->get_id(), 'thumbnail');
+		unset($request);
+		$icon_url      = Product_Icon::get_product_icon($product->get_id(), 'thumbnail');
 		$icon_full_url = Product_Icon::get_product_icon($product->get_id(), 'full');
 
 		$response->data['icon'] = $icon_url ? array(
 			'thumbnail' => $icon_url,
-			'full' => $icon_full_url,
-			'id' => Product_Icon::get_product_icon_id($product->get_id()),
+			'full'      => $icon_full_url,
+			'id'        => Product_Icon::get_product_icon_id($product->get_id()),
 		) : null;
 
 		// Add additional metadata to REST API
-		$response->data['author'] = [
+		$response->data['author']          = [
 			'display_name' => 'David Stone',
 		];
-		$response->data['beta'] = $this->is_beta_product_by_id($product->get_id());
-		$response->data['legacy'] = $this->is_legacy_product_by_id($product->get_id());
-		$response->data['tested_up_to'] = get_post_meta($product->get_id(), '_tested_up_to', true);
-		$response->data['requires'] = get_post_meta($product->get_id(), '_requires_wp', true);
+		$response->data['beta']            = $this->is_beta_product_by_id($product->get_id());
+		$response->data['legacy']          = $this->is_legacy_product_by_id($product->get_id());
+		$response->data['tested_up_to']    = get_post_meta($product->get_id(), '_tested_up_to', true);
+		$response->data['requires']        = get_post_meta($product->get_id(), '_requires_wp', true);
 		$response->data['active_installs'] = get_post_meta($product->get_id(), '_active_installs', true);
 
 		return $response;
@@ -170,7 +178,7 @@ class Store_Api {
 	 */
 	private function is_beta_product_by_id($product_id) {
 		$beta_meta = get_post_meta($product_id, '_is_beta', true);
-		return $beta_meta === 'yes' || $beta_meta === '1';
+		return 'yes' === $beta_meta || '1' === $beta_meta;
 	}
 
 	/**
@@ -181,7 +189,7 @@ class Store_Api {
 	 */
 	private function is_legacy_product_by_id($product_id) {
 		$legacy_meta = get_post_meta($product_id, '_is_legacy', true);
-		return 'yes' === $legacy_meta  || '1' === $legacy_meta;
+		return 'yes' === $legacy_meta || '1' === $legacy_meta;
 	}
 
 	/**
@@ -193,23 +201,24 @@ class Store_Api {
 	 * @return array Modified WP_Query arguments.
 	 */
 	public function modify_subscription_query($wp_query_args, $query_vars, $data_store) {
+		unset($data_store);
 		// Check if type=subscription is requested
-		if (isset($query_vars['type']) && $query_vars['type'] === 'subscription') {
+		if (isset($query_vars['type']) && 'subscription' === $query_vars['type']) {
 			// Change the tax_query to look for 'simple' product type instead of 'subscription'
 			// since we now use simple products that are converted to subscriptions via
 			// WooCommerce All Products for Subscriptions
 			if (isset($wp_query_args['tax_query'])) {
 				foreach ($wp_query_args['tax_query'] as $key => $tax_query) {
-					if (isset($tax_query['taxonomy']) && $tax_query['taxonomy'] === 'product_type'
-					    && isset($tax_query['terms']) && $tax_query['terms'] === 'subscription') {
-						$wp_query_args['tax_query'][$key]['terms'] = 'simple';
+					if (isset($tax_query['taxonomy']) && 'product_type' === $tax_query['taxonomy']
+						&& isset($tax_query['terms']) && 'subscription' === $tax_query['terms']) {
+						$wp_query_args['tax_query'][ $key ]['terms'] = 'simple';
 					}
 				}
 			}
 
 			// Add meta query to filter only products that have subscription schemes
 			// and exclude products where subscriptions are disabled
-			if (!isset($wp_query_args['meta_query'])) {
+			if (! isset($wp_query_args['meta_query'])) {
 				$wp_query_args['meta_query'] = array();
 			}
 
@@ -240,7 +249,7 @@ class Store_Api {
 	 */
 	public function modify_store_api_subscription_query($query) {
 		// Only modify product queries from the Store API
-		if (!defined('REST_REQUEST') || !REST_REQUEST) {
+		if (! defined('REST_REQUEST') || ! REST_REQUEST) {
 			return;
 		}
 
@@ -252,24 +261,24 @@ class Store_Api {
 
 		// Check if there's a tax_query filtering by product_type
 		$tax_query = $query->get('tax_query');
-		if (empty($tax_query) || !is_array($tax_query)) {
+		if (empty($tax_query) || ! is_array($tax_query)) {
 			return;
 		}
 
 		// Look for subscription type query and modify it
 		$modified = false;
 		foreach ($tax_query as $key => $tax_query_item) {
-			if (isset($tax_query_item['taxonomy']) && $tax_query_item['taxonomy'] === 'product_type'
-			    && isset($tax_query_item['terms']) && $tax_query_item['terms'] === 'subscription') {
+			if (isset($tax_query_item['taxonomy']) && 'product_type' === $tax_query_item['taxonomy']
+				&& isset($tax_query_item['terms']) && 'subscription' === $tax_query_item['terms']) {
 				// Change subscription to simple
-				$tax_query[$key]['terms'] = 'simple';
-				$modified = true;
+				$tax_query[ $key ]['terms'] = 'simple';
+				$modified                   = true;
 				break;
 			}
 		}
 
 		// Only modify the query if we found a subscription type filter
-		if (!$modified) {
+		if (! $modified) {
 			return;
 		}
 
@@ -300,5 +309,17 @@ class Store_Api {
 		);
 
 		$query->set('meta_query', $meta_query);
+	}
+
+	public static function get_download_url(\WC_Customer_Download $permission) {
+		return add_query_arg(
+			array(
+				'download_file' => $permission->get_product_id(),
+				'order'         => $permission->get_order_key(),
+				'email'         => rawurlencode($permission->get_user_email()),
+				'key'           => $permission->get_download_id(),
+			),
+			home_url('/')
+		);
 	}
 }
