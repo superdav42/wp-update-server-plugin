@@ -77,7 +77,7 @@ class Store_Api {
 			}
 		}
 
-		return array(
+		$data = array(
 			'author'          => [
 				'display_name' => 'David Stone',
 			],
@@ -89,6 +89,59 @@ class Store_Api {
 			'requires'        => get_post_meta($product_id, '_requires_wp', true),
 			'active_installs' => get_post_meta($product_id, '_active_installs', true),
 		);
+
+		// Add template-specific metadata if product has "template" tag
+		if ($this->is_template_product_by_id($product_id)) {
+			$data = array_merge($data, $this->get_template_metadata($product_id));
+		}
+
+		return $data;
+	}
+
+	/**
+	 * Get template-specific metadata for a product.
+	 *
+	 * @param int $product_id The product ID.
+	 * @return array Template metadata.
+	 */
+	private function get_template_metadata($product_id): array {
+		$included_plugins = get_post_meta($product_id, '_included_plugins', true);
+		$included_themes  = get_post_meta($product_id, '_included_themes', true);
+
+		return array(
+			'demo_url'         => get_post_meta($product_id, '_demo_url', true),
+			'industry_type'    => get_post_meta($product_id, '_industry_type', true),
+			'page_count'       => (int) get_post_meta($product_id, '_page_count', true),
+			'included_plugins' => is_array($included_plugins) ? $included_plugins : array(),
+			'included_themes'  => is_array($included_themes) ? $included_themes : array(),
+			'template_version' => get_post_meta($product_id, '_template_version', true),
+			'compatibility'    => array(
+				'wp_version' => get_post_meta($product_id, '_requires_wp', true),
+				'wu_version' => get_post_meta($product_id, '_requires_wu', true),
+			),
+		);
+	}
+
+	/**
+	 * Check if product is a template by ID.
+	 *
+	 * @param int $product_id The product ID.
+	 * @return bool
+	 */
+	private function is_template_product_by_id($product_id): bool {
+		$terms = get_the_terms($product_id, 'product_tag');
+
+		if (empty($terms) || is_wp_error($terms)) {
+			return false;
+		}
+
+		foreach ($terms as $term) {
+			if ('template' === $term->slug) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -98,42 +151,102 @@ class Store_Api {
 	 */
 	public function get_product_icon_schema() {
 		return array(
-			'icon'            => array(
+			'icon'             => array(
 				'description' => __('Full size icon URL.', 'wp-update-server-plugin'),
 				'type'        => 'string',
 				'format'      => 'uri',
 				'context'     => array('view'),
 				'readonly'    => true,
 			),
-			'beta'            => array(
+			'beta'             => array(
 				'description' => __('Whether the product is marked as beta.', 'wp-update-server-plugin'),
 				'type'        => 'boolean',
 				'context'     => array('view'),
 				'readonly'    => true,
 			),
-			'legacy'          => array(
+			'legacy'           => array(
 				'description' => __('Whether the product is marked as legacy.', 'wp-update-server-plugin'),
 				'type'        => 'boolean',
 				'context'     => array('view'),
 				'readonly'    => true,
 			),
-			'tested_up_to'    => array(
+			'tested_up_to'     => array(
 				'description' => __('WordPress version the product has been tested up to.', 'wp-update-server-plugin'),
 				'type'        => 'string',
 				'context'     => array('view'),
 				'readonly'    => true,
 			),
-			'requires'        => array(
+			'requires'         => array(
 				'description' => __('Minimum WordPress version required.', 'wp-update-server-plugin'),
 				'type'        => 'string',
 				'context'     => array('view'),
 				'readonly'    => true,
 			),
-			'active_installs' => array(
+			'active_installs'  => array(
 				'description' => __('Number of active installations.', 'wp-update-server-plugin'),
 				'type'        => 'string',
 				'context'     => array('view'),
 				'readonly'    => true,
+			),
+			// Template-specific fields
+			'demo_url'         => array(
+				'description' => __('URL to live demo site.', 'wp-update-server-plugin'),
+				'type'        => 'string',
+				'format'      => 'uri',
+				'context'     => array('view'),
+				'readonly'    => true,
+			),
+			'industry_type'    => array(
+				'description' => __('Industry category for the template.', 'wp-update-server-plugin'),
+				'type'        => 'string',
+				'context'     => array('view'),
+				'readonly'    => true,
+			),
+			'page_count'       => array(
+				'description' => __('Number of pages in the template.', 'wp-update-server-plugin'),
+				'type'        => 'integer',
+				'context'     => array('view'),
+				'readonly'    => true,
+			),
+			'included_plugins' => array(
+				'description' => __('List of plugins included in the template.', 'wp-update-server-plugin'),
+				'type'        => 'array',
+				'context'     => array('view'),
+				'readonly'    => true,
+				'items'       => array(
+					'type' => 'object',
+				),
+			),
+			'included_themes'  => array(
+				'description' => __('List of themes included in the template.', 'wp-update-server-plugin'),
+				'type'        => 'array',
+				'context'     => array('view'),
+				'readonly'    => true,
+				'items'       => array(
+					'type' => 'object',
+				),
+			),
+			'template_version' => array(
+				'description' => __('Version number of the template.', 'wp-update-server-plugin'),
+				'type'        => 'string',
+				'context'     => array('view'),
+				'readonly'    => true,
+			),
+			'compatibility'    => array(
+				'description' => __('Compatibility requirements.', 'wp-update-server-plugin'),
+				'type'        => 'object',
+				'context'     => array('view'),
+				'readonly'    => true,
+				'properties'  => array(
+					'wp_version' => array(
+						'description' => __('Minimum WordPress version required.', 'wp-update-server-plugin'),
+						'type'        => 'string',
+					),
+					'wu_version' => array(
+						'description' => __('Minimum Ultimate Multisite version required.', 'wp-update-server-plugin'),
+						'type'        => 'string',
+					),
+				),
 			),
 		);
 	}
@@ -148,24 +261,33 @@ class Store_Api {
 	 */
 	public function add_product_icon_to_api($response, $product, $request) {
 		unset($request);
-		$icon_url      = Product_Icon::get_product_icon($product->get_id(), 'thumbnail');
-		$icon_full_url = Product_Icon::get_product_icon($product->get_id(), 'full');
+		$product_id    = $product->get_id();
+		$icon_url      = Product_Icon::get_product_icon($product_id, 'thumbnail');
+		$icon_full_url = Product_Icon::get_product_icon($product_id, 'full');
 
 		$response->data['icon'] = $icon_url ? array(
 			'thumbnail' => $icon_url,
 			'full'      => $icon_full_url,
-			'id'        => Product_Icon::get_product_icon_id($product->get_id()),
+			'id'        => Product_Icon::get_product_icon_id($product_id),
 		) : null;
 
 		// Add additional metadata to REST API
 		$response->data['author']          = [
 			'display_name' => 'David Stone',
 		];
-		$response->data['beta']            = $this->is_beta_product_by_id($product->get_id());
-		$response->data['legacy']          = $this->is_legacy_product_by_id($product->get_id());
-		$response->data['tested_up_to']    = get_post_meta($product->get_id(), '_tested_up_to', true);
-		$response->data['requires']        = get_post_meta($product->get_id(), '_requires_wp', true);
-		$response->data['active_installs'] = get_post_meta($product->get_id(), '_active_installs', true);
+		$response->data['beta']            = $this->is_beta_product_by_id($product_id);
+		$response->data['legacy']          = $this->is_legacy_product_by_id($product_id);
+		$response->data['tested_up_to']    = get_post_meta($product_id, '_tested_up_to', true);
+		$response->data['requires']        = get_post_meta($product_id, '_requires_wp', true);
+		$response->data['active_installs'] = get_post_meta($product_id, '_active_installs', true);
+
+		// Add template-specific metadata if product has "template" tag
+		if ($this->is_template_product_by_id($product_id)) {
+			$template_data = $this->get_template_metadata($product_id);
+			foreach ($template_data as $key => $value) {
+				$response->data[ $key ] = $value;
+			}
+		}
 
 		return $response;
 	}
