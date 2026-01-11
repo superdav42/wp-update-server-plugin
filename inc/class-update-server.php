@@ -57,6 +57,9 @@ class Update_Server extends \Wpup_UpdateServer {
 			array(
 				'product_id' => $product_id,
 				'user_id'    => $user_id,
+				'orderby'    => 'permission_id',
+				'order'      => 'DESC',
+				'limit'      => 1,
 			)
 		);
 
