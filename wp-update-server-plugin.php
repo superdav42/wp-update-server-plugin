@@ -41,7 +41,6 @@ $wp_update_server_plugin_downloads_page       = new \WP_Update_Server_Plugin\Dow
 $wp_update_server_plugin_changelog_manager = new \WP_Update_Server_Plugin\Changelog_Manager();
 
 add_action('woocommerce_loaded', function () {
-	require_once __DIR__ . '/inc/class-new-release-email.php';
 	require_once __DIR__ . '/inc/class-release-notifier.php';
 	$wp_update_server_plugin_release_notifier  = new \WP_Update_Server_Plugin\Release_Notifier();
 });

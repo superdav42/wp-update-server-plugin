@@ -76,6 +76,10 @@ class Release_Notifier {
 	 * @return array Modified array of email classes.
 	 */
 	public function register_email_class( array $email_classes ): array {
+        if ( ! class_exists( 'WC_Email', false ) ) {
+            include_once WC_ABSPATH . 'includes/emails/class-wc-email.php';
+        }
+        require_once __DIR__ . '/inc/class-new-release-email.php';
 		$email_classes['WU_New_Release_Email'] = new New_Release_Email();
 		return $email_classes;
 	}
