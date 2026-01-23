@@ -1,0 +1,706 @@
+/**
+ * Downloads Page Styles
+ *
+ * Freemius-like interface for WooCommerce account downloads.
+ */
+
+/* Downloads Page Container */
+.wu-downloads-page {
+	margin-bottom: 2rem;
+}
+
+/* Instructions Section */
+.wu-downloads-instructions {
+	background: #f8f9fa;
+	border: 1px solid #e1e1e1;
+	border-radius: 4px;
+	padding: 1rem 1.5rem;
+	margin-bottom: 1.5rem;
+}
+
+.wu-downloads-instructions p {
+	margin: 0;
+	color: #555;
+	font-size: 0.9rem;
+}
+
+/* Downloads Table */
+.wu-downloads-table {
+	width: 100%;
+	border-collapse: collapse;
+	border: 1px solid #e1e1e1;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.wu-downloads-table thead {
+	background: #f8f9fa;
+}
+
+.wu-downloads-table th {
+	padding: 0.75rem 1rem;
+	text-align: left;
+	font-weight: 600;
+	font-size: 0.85rem;
+	color: #333;
+	border-bottom: 2px solid #e1e1e1;
+}
+
+.wu-downloads-table td {
+	padding: 1rem;
+	border-bottom: 1px solid #e1e1e1;
+	vertical-align: middle;
+}
+
+.wu-downloads-table tr:last-child td {
+	border-bottom: none;
+}
+
+.wu-downloads-table tr:hover {
+	background: #fafafa;
+}
+
+/* Product Info Cell */
+.wu-product-info {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.wu-product-icon {
+	width: 40px;
+	height: 40px;
+	border-radius: 6px;
+	object-fit: cover;
+	flex-shrink: 0;
+}
+
+.wu-product-icon--placeholder {
+	background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+}
+
+.wu-product-name {
+	font-weight: 500;
+	color: #1a1a1a;
+}
+
+/* Download Controls */
+.wu-download-controls {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.wu-version-select {
+	padding: 0.4rem 2rem 0.4rem 0.75rem;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-size: 0.9rem;
+	background: #fff;
+	cursor: pointer;
+	min-width: 120px;
+}
+
+.wu-version-select:focus {
+	outline: none;
+	border-color: #6366f1;
+	box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.wu-download-button {
+	padding: 0.4rem 1rem !important;
+	font-size: 0.9rem !important;
+	white-space: nowrap;
+}
+
+/* Product Type Badge */
+.wu-product-type {
+	display: inline-block;
+	padding: 0.25rem 0.75rem;
+	border-radius: 12px;
+	font-size: 0.8rem;
+	font-weight: 500;
+	text-transform: capitalize;
+}
+
+.wu-product-type--plugin {
+	background: #e8f5e9;
+	color: #2e7d32;
+}
+
+.wu-product-type--theme {
+	background: #e3f2fd;
+	color: #1565c0;
+}
+
+/* Version Badge */
+.wu-version-badge {
+	display: inline-block;
+	padding: 0.2rem 0.5rem;
+	background: #f5f5f5;
+	border-radius: 4px;
+	font-size: 0.85rem;
+	font-family: monospace;
+	color: #555;
+}
+
+.wu-version-badge--unknown {
+	color: #999;
+}
+
+/* Composer Button */
+.wu-composer-button {
+	display: inline-flex !important;
+	align-items: center;
+	gap: 0.25rem;
+	padding: 0.4rem 0.75rem !important;
+	font-size: 0.85rem !important;
+}
+
+.wu-composer-button .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+}
+
+/* Modal Styles */
+.wu-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 100000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.wu-modal-overlay {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.6);
+}
+
+.wu-modal-container {
+	position: relative;
+	background: #fff;
+	border-radius: 8px;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+	width: 90%;
+	max-width: 700px;
+	max-height: 90vh;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+.wu-modal-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 1rem 1.5rem;
+	border-bottom: 1px solid #e1e1e1;
+	background: #f8f9fa;
+}
+
+.wu-modal-header h2 {
+	margin: 0;
+	font-size: 1.25rem;
+	font-weight: 600;
+}
+
+.wu-modal-close {
+	background: none;
+	border: none;
+	font-size: 1.5rem;
+	cursor: pointer;
+	padding: 0;
+	line-height: 1;
+	color: #666;
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+}
+
+.wu-modal-close:hover {
+	background: #e1e1e1;
+	color: #333;
+}
+
+.wu-modal-body {
+	flex: 1;
+	overflow-y: auto;
+	padding: 0;
+}
+
+.wu-modal-footer {
+	padding: 1rem 1.5rem;
+	border-top: 1px solid #e1e1e1;
+	background: #f8f9fa;
+	text-align: center;
+}
+
+.wu-modal-footer a {
+	color: #6366f1;
+	text-decoration: none;
+	font-size: 0.9rem;
+}
+
+.wu-modal-footer a:hover {
+	text-decoration: underline;
+}
+
+.wu-modal-footer .dashicons {
+	font-size: 14px;
+	width: 14px;
+	height: 14px;
+	vertical-align: middle;
+}
+
+/* Modal Tabs */
+.wu-modal-tabs {
+	display: flex;
+	border-bottom: 1px solid #e1e1e1;
+	background: #fff;
+}
+
+.wu-modal-tab {
+	padding: 0.75rem 1.5rem;
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	cursor: pointer;
+	font-size: 0.95rem;
+	color: #666;
+	transition: all 0.2s;
+}
+
+.wu-modal-tab:hover {
+	color: #333;
+	background: #f8f9fa;
+}
+
+.wu-modal-tab.active {
+	color: #6366f1;
+	border-bottom-color: #6366f1;
+	font-weight: 500;
+}
+
+.wu-modal-tab-content {
+	display: none;
+	padding: 1.5rem;
+}
+
+.wu-modal-tab-content.active {
+	display: block;
+}
+
+/* Composer Sections */
+.wu-composer-section {
+	margin-bottom: 1.5rem;
+}
+
+.wu-composer-section:last-child {
+	margin-bottom: 0;
+}
+
+.wu-composer-section h3 {
+	margin: 0 0 0.5rem;
+	font-size: 1rem;
+	font-weight: 600;
+	color: #333;
+}
+
+.wu-section-description {
+	margin: 0 0 0.75rem;
+	color: #666;
+	font-size: 0.9rem;
+}
+
+.wu-section-note {
+	margin: 0.75rem 0 0.5rem;
+	color: #666;
+	font-size: 0.85rem;
+}
+
+.wu-composer-section--alternative {
+	padding-top: 1.5rem;
+	border-top: 1px dashed #e1e1e1;
+}
+
+.wu-composer-section--token {
+	padding-top: 1.5rem;
+	border-top: 1px solid #e1e1e1;
+}
+
+/* Code Blocks */
+.wu-code-block {
+	position: relative;
+	background: #1e1e2e;
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.wu-code-block pre {
+	margin: 0;
+	padding: 1rem;
+	padding-right: 4rem;
+	overflow-x: auto;
+}
+
+.wu-code-block code {
+	font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+	font-size: 0.85rem;
+	line-height: 1.5;
+	color: #a6e3a1;
+	white-space: pre;
+}
+
+.wu-code-block--inline {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.25rem 0.5rem;
+	padding-right: 2.5rem;
+	background: #f5f5f5;
+	border: 1px solid #e1e1e1;
+}
+
+.wu-code-block--inline code {
+	color: #333;
+	background: none;
+	padding: 0;
+}
+
+.wu-code-block--highlight {
+	background: #1a4731;
+	border: 2px solid #22c55e;
+}
+
+.wu-code-block--highlight code {
+	color: #4ade80;
+	font-weight: 500;
+}
+
+.wu-token-placeholder {
+	color: #fab387;
+}
+
+.wu-package-name {
+	color: #89b4fa;
+}
+
+/* Copy Button */
+.wu-copy-button {
+	position: absolute;
+	top: 0.5rem;
+	right: 0.5rem;
+	background: rgba(255, 255, 255, 0.1);
+	border: none;
+	border-radius: 4px;
+	padding: 0.35rem 0.5rem;
+	cursor: pointer;
+	color: #ccc;
+	font-size: 0.8rem;
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	transition: all 0.2s;
+}
+
+.wu-copy-button:hover {
+	background: rgba(255, 255, 255, 0.2);
+	color: #fff;
+}
+
+.wu-copy-button .dashicons {
+	font-size: 14px;
+	width: 14px;
+	height: 14px;
+}
+
+.wu-code-block--inline .wu-copy-button {
+	position: static;
+	background: #e1e1e1;
+	color: #666;
+}
+
+.wu-code-block--inline .wu-copy-button:hover {
+	background: #d1d1d1;
+	color: #333;
+}
+
+.wu-copy-button--small {
+	padding: 0.25rem;
+}
+
+.wu-copy-button.copied {
+	background: #22c55e;
+	color: #fff;
+}
+
+/* Token Display */
+.wu-token-display {
+	min-height: 80px;
+}
+
+.wu-token-status {
+	padding: 1rem;
+	background: #f8f9fa;
+	border-radius: 6px;
+	border: 1px solid #e1e1e1;
+}
+
+.wu-token-status--loading {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	color: #666;
+}
+
+.wu-token-status--loading .spinner {
+	float: none;
+	margin: 0;
+}
+
+.wu-token-status--no-token p {
+	margin: 0 0 1rem;
+	color: #666;
+}
+
+.wu-current-token {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+}
+
+.wu-current-token label {
+	font-weight: 500;
+	color: #333;
+}
+
+.wu-token-note {
+	margin: 0.75rem 0 0;
+	font-size: 0.85rem;
+	color: #666;
+}
+
+/* Alerts */
+.wu-alert {
+	padding: 0.75rem 1rem;
+	border-radius: 6px;
+	margin-bottom: 1rem;
+}
+
+.wu-alert--success {
+	background: #dcfce7;
+	border: 1px solid #86efac;
+	color: #166534;
+}
+
+/* Tokens Table */
+.wu-tokens-section h3 {
+	margin: 0;
+}
+
+.wu-tokens-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 1rem;
+}
+
+.wu-generate-token-button .dashicons {
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+	vertical-align: middle;
+	margin-right: 0.25rem;
+}
+
+.wu-new-token-form {
+	background: #f8f9fa;
+	padding: 1rem;
+	border-radius: 6px;
+	margin-bottom: 1rem;
+}
+
+.wu-new-token-form label {
+	display: block;
+	margin-bottom: 0.5rem;
+	font-weight: 500;
+}
+
+.wu-token-form-row {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.wu-token-form-row input {
+	flex: 1;
+	padding: 0.5rem;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+}
+
+.wu-tokens-loading {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 2rem;
+	justify-content: center;
+	color: #666;
+}
+
+.wu-tokens-loading .spinner {
+	float: none;
+	margin: 0;
+}
+
+.wu-tokens-table {
+	width: 100%;
+	border-collapse: collapse;
+	border: 1px solid #e1e1e1;
+	border-radius: 6px;
+	overflow: hidden;
+}
+
+.wu-tokens-table th {
+	background: #f8f9fa;
+	padding: 0.75rem;
+	text-align: left;
+	font-weight: 600;
+	font-size: 0.85rem;
+	border-bottom: 1px solid #e1e1e1;
+}
+
+.wu-tokens-table td {
+	padding: 0.75rem;
+	border-bottom: 1px solid #e1e1e1;
+	font-size: 0.9rem;
+}
+
+.wu-tokens-table tr:last-child td {
+	border-bottom: none;
+}
+
+.wu-token-prefix {
+	font-family: monospace;
+	background: #f5f5f5;
+	padding: 0.2rem 0.5rem;
+	border-radius: 4px;
+}
+
+.wu-revoke-token-button {
+	color: #dc2626 !important;
+	border-color: #dc2626 !important;
+}
+
+.wu-revoke-token-button:hover {
+	background: #fef2f2 !important;
+}
+
+.wu-no-tokens {
+	padding: 2rem;
+	text-align: center;
+	color: #666;
+	background: #f8f9fa;
+	border-radius: 6px;
+}
+
+.wu-no-tokens p {
+	margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+	.wu-downloads-table,
+	.wu-downloads-table thead,
+	.wu-downloads-table tbody,
+	.wu-downloads-table th,
+	.wu-downloads-table td,
+	.wu-downloads-table tr {
+		display: block;
+	}
+
+	.wu-downloads-table thead {
+		display: none;
+	}
+
+	.wu-downloads-table tr {
+		margin-bottom: 1rem;
+		border: 1px solid #e1e1e1;
+		border-radius: 6px;
+		overflow: hidden;
+	}
+
+	.wu-downloads-table td {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.75rem 1rem;
+		border-bottom: 1px solid #e1e1e1;
+	}
+
+	.wu-downloads-table td::before {
+		content: attr(data-title);
+		font-weight: 600;
+		margin-right: 1rem;
+	}
+
+	.wu-downloads-table td:last-child {
+		border-bottom: none;
+	}
+
+	.wu-download-controls {
+		flex-wrap: wrap;
+	}
+
+	.wu-modal-container {
+		width: 95%;
+		max-height: 95vh;
+	}
+
+	.wu-token-form-row {
+		flex-direction: column;
+	}
+
+	.wu-tokens-table,
+	.wu-tokens-table thead,
+	.wu-tokens-table tbody,
+	.wu-tokens-table th,
+	.wu-tokens-table td,
+	.wu-tokens-table tr {
+		display: block;
+	}
+
+	.wu-tokens-table thead {
+		display: none;
+	}
+
+	.wu-tokens-table tr {
+		margin-bottom: 0.5rem;
+		border: 1px solid #e1e1e1;
+		border-radius: 6px;
+		padding: 0.5rem;
+	}
+
+	.wu-tokens-table td {
+		display: flex;
+		justify-content: space-between;
+		padding: 0.5rem;
+		border: none;
+	}
+
+	.wu-tokens-table td::before {
+		content: attr(data-title);
+		font-weight: 600;
+	}
+}
