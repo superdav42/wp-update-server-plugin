@@ -19,11 +19,20 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Changelog_Manager {
 
 	/**
-	 * Meta key for storing changelog.
+	 * Meta key for storing full changelog.
 	 *
 	 * @var string
 	 */
 	const META_KEY = '_wu_changelog';
+
+	/**
+	 * Meta key for storing latest version's changelog.
+	 *
+	 * Used for email notifications to show only the current release's changes.
+	 *
+	 * @var string
+	 */
+	const LATEST_META_KEY = '_wu_latest_changelog';
 
 	/**
 	 * Constructor.
@@ -84,13 +93,37 @@ class Changelog_Manager {
 	}
 
 	/**
-	 * Get a truncated excerpt of the changelog.
+	 * Get the latest version's changelog for a product.
+	 *
+	 * This contains only the changes for the most recent version,
+	 * suitable for email notifications.
 	 *
 	 * @param int $product_id The product ID.
-	 * @param int $max_length Maximum length of the excerpt.
+	 * @return string The latest version's changelog text.
+	 */
+	public static function get_latest_changelog( int $product_id ): string {
+		return (string) get_post_meta( $product_id, self::LATEST_META_KEY, true );
+	}
+
+	/**
+	 * Get a changelog excerpt suitable for email notifications.
+	 *
+	 * Prefers the latest version's changelog if available, otherwise
+	 * falls back to a truncated version of the full changelog.
+	 *
+	 * @param int $product_id The product ID.
+	 * @param int $max_length Maximum length of the excerpt (only used for fallback).
 	 * @return string The changelog excerpt.
 	 */
 	public static function get_changelog_excerpt( int $product_id, int $max_length = 500 ): string {
+		// First try to get the latest version's changelog (preferred for emails)
+		$latest_changelog = self::get_latest_changelog( $product_id );
+
+		if ( ! empty( $latest_changelog ) ) {
+			return $latest_changelog;
+		}
+
+		// Fallback to truncating the full changelog
 		$changelog = self::get_changelog( $product_id );
 
 		if ( empty( $changelog ) ) {

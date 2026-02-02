@@ -37,12 +37,6 @@ $downloads = \WP_Update_Server_Plugin\Downloads_Page::get_downloads_data();
 					<th class="wu-downloads-table__header wu-downloads-table__header--type">
 						<?php esc_html_e('Type', 'wp-update-server-plugin'); ?>
 					</th>
-					<th class="wu-downloads-table__header wu-downloads-table__header--requires">
-						<?php esc_html_e('Required', 'wp-update-server-plugin'); ?>
-					</th>
-					<th class="wu-downloads-table__header wu-downloads-table__header--tested">
-						<?php esc_html_e('Tested Up To', 'wp-update-server-plugin'); ?>
-					</th>
 					<th class="wu-downloads-table__header wu-downloads-table__header--composer">
 						<?php esc_html_e('Composer', 'wp-update-server-plugin'); ?>
 					</th>
@@ -91,20 +85,6 @@ $downloads = \WP_Update_Server_Plugin\Downloads_Page::get_downloads_data();
 							<span class="wu-product-type wu-product-type--<?php echo esc_attr($product['type']); ?>">
 								<?php echo esc_html(ucfirst($product['type'])); ?>
 							</span>
-						</td>
-						<td class="wu-downloads-table__cell wu-downloads-table__cell--requires" data-title="<?php esc_attr_e('Required', 'wp-update-server-plugin'); ?>">
-							<?php if ( ! empty($product['requires'])) : ?>
-								<span class="wu-version-badge">WP <?php echo esc_html($product['requires']); ?>+</span>
-							<?php else : ?>
-								<span class="wu-version-badge wu-version-badge--unknown">-</span>
-							<?php endif; ?>
-						</td>
-						<td class="wu-downloads-table__cell wu-downloads-table__cell--tested" data-title="<?php esc_attr_e('Tested Up To', 'wp-update-server-plugin'); ?>">
-							<?php if ( ! empty($product['tested_up_to'])) : ?>
-								<span class="wu-version-badge">WP <?php echo esc_html($product['tested_up_to']); ?></span>
-							<?php else : ?>
-								<span class="wu-version-badge wu-version-badge--unknown">-</span>
-							<?php endif; ?>
 						</td>
 						<td class="wu-downloads-table__cell wu-downloads-table__cell--composer" data-title="<?php esc_attr_e('Composer', 'wp-update-server-plugin'); ?>">
 							<button type="button" class="wu-composer-button button" data-product-sku="<?php echo esc_attr($product['sku']); ?>">
