@@ -346,6 +346,10 @@ class Product_Versions {
 	/**
 	 * Get the latest version for a product, optionally filtering out pre-releases.
 	 *
+	 * When $include_prerelease is true, a pre-release like 1.0.0-beta.1 is considered
+	 * newer than 1.0.0 (its base version). PHP's version_compare treats pre-release
+	 * suffixes as lower, so we need custom logic here.
+	 *
 	 * @param int  $product_id          The product ID.
 	 * @param bool $include_prerelease  Whether to include pre-release versions.
 	 * @return array|null Latest version data or null if none found.
@@ -358,13 +362,56 @@ class Product_Versions {
 			return null;
 		}
 
+		if (! $include_prerelease) {
+			foreach ($versions as $version_data) {
+				if (! self::is_prerelease($version_data['version'])) {
+					return $version_data;
+				}
+			}
+
+			return null;
+		}
+
+		// When including pre-releases, we need to find the true latest.
+		// PHP's version_compare sorts 1.0.0 > 1.0.0-beta.1, but semver says
+		// 1.0.0-beta.1 is a pre-release OF 1.0.0, meaning it was published
+		// before/after the stable and should be considered newer when opted in.
+		// Strategy: find the latest stable, then check if any pre-release has
+		// a base version >= that stable version. If so, the pre-release wins.
+		$latest_stable     = null;
+		$latest_prerelease = null;
+
 		foreach ($versions as $version_data) {
-			if ($include_prerelease || ! self::is_prerelease($version_data['version'])) {
-				return $version_data;
+			if (self::is_prerelease($version_data['version'])) {
+				if (! $latest_prerelease) {
+					$latest_prerelease = $version_data;
+				}
+			} else {
+				if (! $latest_stable) {
+					$latest_stable = $version_data;
+				}
 			}
 		}
 
-		return null;
+		// Only pre-releases exist
+		if (! $latest_stable) {
+			return $latest_prerelease;
+		}
+
+		// No pre-releases exist
+		if (! $latest_prerelease) {
+			return $latest_stable;
+		}
+
+		// Both exist — extract the base version from the pre-release
+		$prerelease_base = preg_replace('/-(?:alpha|beta|rc|dev|preview)[\w.]*/i', '', $latest_prerelease['version']);
+
+		// If the pre-release's base version >= the stable version, the pre-release is newer
+		if (version_compare($prerelease_base, $latest_stable['version'], '>=')) {
+			return $latest_prerelease;
+		}
+
+		return $latest_stable;
 	}
 
 	/**

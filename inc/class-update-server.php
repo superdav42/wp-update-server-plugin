@@ -101,39 +101,43 @@ class Update_Server extends \Wpup_UpdateServer {
 		$product_id = wc_get_product_id_by_sku($slug);
 		$product    = wc_get_product($product_id);
 
+		if (! $product || ! $product->exists() || ! $product->is_downloadable()) {
+			return null;
+		}
+
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$include_beta = ! empty($_GET['beta']);
 
-		$latest_version = null;
-		if ($product && $product->exists() && $product->is_downloadable()) {
-			$files = $product->get_downloads();
-			foreach ($files as $file_id => $file) {
-				$file_info = \WC_Download_Handler::parse_file_path($product->get_file_download_path($file_id));
-				$filepath  = $file_info['file_path'];
+		// Use Product_Versions to find the correct version to serve
+		$target = Product_Versions::get_latest_version_by_product_id($product_id, $include_beta);
 
-				if ( $file_info['remote_file'] ) {
-					require_once ABSPATH . 'wp-admin/includes/file.php';
-					$tmp = wp_tempnam($file['name']);
-					file_put_contents($tmp, file_get_contents($filepath));
-					$filepath = $tmp;
-				}
-
-				if ($file->get_enabled() && is_file($filepath) && is_readable($filepath)) {
-					/** @var \Wpup_Package $package */
-					$package = call_user_func($this->packageFileLoader, $filepath, $slug, $this->cache);
-				}
-
-				// Skip pre-release versions unless beta is requested
-				if (isset($package) && ! $include_beta && Product_Versions::is_prerelease($package->getMetadata()['version'] ?? '')) {
-					continue;
-				}
-
-				if (empty($latest_version) || version_compare($package->getMetadata()['version'], $latest_version->getMetadata()['version'], '>')) {
-					$latest_version = $package;
-				}
-			}
+		if (! $target || ! isset($target['file_id'])) {
+			return null;
 		}
-		return $latest_version;
+
+		// Load the package from the target version's file
+		$files = $product->get_downloads();
+
+		if (! isset($files[$target['file_id']])) {
+			return null;
+		}
+
+		$file      = $files[$target['file_id']];
+		$file_info = \WC_Download_Handler::parse_file_path($product->get_file_download_path($target['file_id']));
+		$filepath  = $file_info['file_path'];
+
+		if ($file_info['remote_file']) {
+			require_once ABSPATH . 'wp-admin/includes/file.php';
+			$tmp = wp_tempnam($file['name']);
+			file_put_contents($tmp, file_get_contents($filepath));
+			$filepath = $tmp;
+		}
+
+		if ($file->get_enabled() && is_file($filepath) && is_readable($filepath)) {
+			return call_user_func($this->packageFileLoader, $filepath, $slug, $this->cache);
+		}
+
+		return null;
 	}
 
 	/**
