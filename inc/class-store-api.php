@@ -57,24 +57,72 @@ class Store_Api {
 		}
 		$icon_full_url = Product_Icon::get_product_icon($product_id, 'full');
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$include_beta = ! empty($_GET['beta']);
+
 		$user_id = apply_filters('determine_current_user', null);
 
 		$download_url = '';
 		if ($user_id) {
-			$permissions = $this->downloads_data_store->get_downloads(
-				array(
-					'product_id' => $product_id,
-					'user_id'    => $user_id,
-				)
-			);
+			if ($include_beta) {
+				// When beta is requested, find the latest version (including pre-releases)
+				$latest = Product_Versions::get_latest_version_by_product_id($product_id, true);
 
-			if ( ! empty($permissions) ) {
-				foreach ( $permissions as $permission ) {
-					/** @var \WC_Customer_Download $permission */
-					$download_url = self::get_download_url($permission);
-					break;
+				if ($latest && isset($latest['file_id'])) {
+					$permissions = $this->downloads_data_store->get_downloads(
+						array(
+							'product_id' => $product_id,
+							'user_id'    => $user_id,
+							'limit'      => 1,
+						)
+					);
+
+					if (! empty($permissions)) {
+						$download_url = add_query_arg(
+							array(
+								'download_file' => $permissions[0]->get_product_id(),
+								'order'         => $permissions[0]->get_order_key(),
+								'email'         => rawurlencode($permissions[0]->get_user_email()),
+								'key'           => $latest['file_id'],
+							),
+							home_url('/')
+						);
+					}
+				}
+			} else {
+				// Find the latest stable version and build a download URL for it
+				$latest_stable = Product_Versions::get_latest_version_by_product_id($product_id, false);
+
+				if ($latest_stable && isset($latest_stable['file_id'])) {
+					$permissions = $this->downloads_data_store->get_downloads(
+						array(
+							'product_id' => $product_id,
+							'user_id'    => $user_id,
+							'limit'      => 1,
+						)
+					);
+
+					if (! empty($permissions)) {
+						$download_url = add_query_arg(
+							array(
+								'download_file' => $permissions[0]->get_product_id(),
+								'order'         => $permissions[0]->get_order_key(),
+								'email'         => rawurlencode($permissions[0]->get_user_email()),
+								'key'           => $latest_stable['file_id'],
+							),
+							home_url('/')
+						);
+					}
 				}
 			}
+		}
+
+		// Get latest beta version string if one exists
+		$beta_version_data = Product_Versions::get_latest_version_by_product_id($product_id, true);
+		$beta_version      = null;
+
+		if ($beta_version_data && Product_Versions::is_prerelease($beta_version_data['version'])) {
+			$beta_version = $beta_version_data['version'];
 		}
 
 		$data = array(
@@ -84,6 +132,7 @@ class Store_Api {
 			'download_url'    => $download_url,
 			'icon'            => $icon_full_url,
 			'beta'            => $this->is_beta_product_by_id($product_id),
+			'beta_version'    => $beta_version,
 			'legacy'          => $this->is_legacy_product_by_id($product_id),
 			'tested_up_to'    => get_post_meta($product_id, '_tested_up_to', true),
 			'requires'        => get_post_meta($product_id, '_requires_wp', true),
@@ -161,6 +210,12 @@ class Store_Api {
 			'beta'             => array(
 				'description' => __('Whether the product is marked as beta.', 'wp-update-server-plugin'),
 				'type'        => 'boolean',
+				'context'     => array('view'),
+				'readonly'    => true,
+			),
+			'beta_version'     => array(
+				'description' => __('Latest pre-release version string, or null if none.', 'wp-update-server-plugin'),
+				'type'        => array('string', 'null'),
 				'context'     => array('view'),
 				'readonly'    => true,
 			),

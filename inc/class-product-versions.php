@@ -333,6 +333,41 @@ class Product_Versions {
 	}
 
 	/**
+	 * Check if a version string is a pre-release (alpha, beta, rc, etc.).
+	 *
+	 * @param string $version The version string.
+	 * @return bool True if the version is a pre-release.
+	 */
+	public static function is_prerelease(string $version): bool {
+
+		return (bool) preg_match('/-(?:alpha|beta|rc|dev|preview)\b/i', $version);
+	}
+
+	/**
+	 * Get the latest version for a product, optionally filtering out pre-releases.
+	 *
+	 * @param int  $product_id          The product ID.
+	 * @param bool $include_prerelease  Whether to include pre-release versions.
+	 * @return array|null Latest version data or null if none found.
+	 */
+	public static function get_latest_version_by_product_id(int $product_id, bool $include_prerelease = false): ?array {
+
+		$versions = self::get_all_versions_by_product_id($product_id);
+
+		if (empty($versions)) {
+			return null;
+		}
+
+		foreach ($versions as $version_data) {
+			if ($include_prerelease || ! self::is_prerelease($version_data['version'])) {
+				return $version_data;
+			}
+		}
+
+		return null;
+	}
+
+	/**
 	 * Clear version cache for a product.
 	 *
 	 * @param int $product_id The product ID.

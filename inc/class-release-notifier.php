@@ -140,6 +140,11 @@ class Release_Notifier {
 		// Determine version from the new download.
 		$version = $this->get_version_from_download( $product, reset( $new_download_ids ) );
 
+		// Skip notifications for pre-release versions.
+		if ( Product_Versions::is_prerelease( $version ) ) {
+			return;
+		}
+
 		// Schedule notification batch processing.
 		$this->schedule_notifications( $actual_product_id, $version );
 

@@ -50,6 +50,16 @@ class Update_Server extends \Wpup_UpdateServer {
 		$product_data_store = wc_get_container()->get(LegacyProxy::class)->get_instance_of(\WC_Data_Store::class, 'product');
 		$product_id         = $product_data_store->get_product_id_by_sku($slug);
 
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$include_beta = ! empty($_GET['beta']);
+
+		// Find the appropriate version (stable or beta) to serve
+		$target_version = Product_Versions::get_latest_version_by_product_id($product_id, $include_beta);
+
+		if (! $target_version || ! isset($target_version['file_id'])) {
+			return null;
+		}
+
 		/** @var \WC_Customer_Download_Data_Store $downloads_data_store */
 		$downloads_data_store = wc_get_container()->get(LegacyProxy::class)->get_instance_of(\WC_Data_Store::class, 'customer-download');
 
@@ -64,39 +74,19 @@ class Update_Server extends \Wpup_UpdateServer {
 		);
 
 		if ( ! empty($permissions) ) {
-			foreach ( $permissions as $permission ) {
-				/** @var \WC_Customer_Download $permission */
-				return Store_Api::get_download_url($permission);
-			}
+			$permission = $permissions[0];
+
+			return add_query_arg(
+				array(
+					'download_file' => $permission->get_product_id(),
+					'order'         => $permission->get_order_key(),
+					'email'         => rawurlencode($permission->get_user_email()),
+					'key'           => $target_version['file_id'],
+				),
+				home_url('/')
+			);
 		}
 
-		// Check if the current user has valid purchase history for this product.
-		$customer_orders = wc_get_orders(
-			array(
-				'limit'       => -1,
-				'customer_id' => $user_id,
-				'status'      => array('wc-completed'), // Only completed orders
-			)
-		);
-
-		foreach ($customer_orders as $order) {
-			foreach ($order->get_items() as $item) {
-				$item_product = $item->get_product();
-				if ($item_product && $item_product->get_sku() === $slug) {
-					$downloads = $item->get_item_downloads();
-					uasort(
-						$downloads,
-						function ($a, $b) {
-							return version_compare(substr(strrchr($a['name'], '-'), 1), substr(strrchr($b['name'], '-'), 1));
-						}
-					);
-					$download = end($downloads);
-					if ($download) {
-						return $download['download_url'];
-					}
-				}
-			}
-		}
 		return null;
 	}
 
@@ -110,6 +100,9 @@ class Update_Server extends \Wpup_UpdateServer {
 	protected function findPackage($slug) {
 		$product_id = wc_get_product_id_by_sku($slug);
 		$product    = wc_get_product($product_id);
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$include_beta = ! empty($_GET['beta']);
 
 		$latest_version = null;
 		if ($product && $product->exists() && $product->is_downloadable()) {
@@ -128,6 +121,11 @@ class Update_Server extends \Wpup_UpdateServer {
 				if ($file->get_enabled() && is_file($filepath) && is_readable($filepath)) {
 					/** @var \Wpup_Package $package */
 					$package = call_user_func($this->packageFileLoader, $filepath, $slug, $this->cache);
+				}
+
+				// Skip pre-release versions unless beta is requested
+				if (isset($package) && ! $include_beta && Product_Versions::is_prerelease($package->getMetadata()['version'] ?? '')) {
+					continue;
 				}
 
 				if (empty($latest_version) || version_compare($package->getMetadata()['version'], $latest_version->getMetadata()['version'], '>')) {

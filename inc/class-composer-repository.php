@@ -120,9 +120,10 @@ class Composer_Repository {
 	 */
 	public function handle_packages_request(\WP_REST_Request $request): \WP_REST_Response {
 
-		$user_id = $request->get_param('_authenticated_user_id');
+		$user_id        = $request->get_param('_authenticated_user_id');
+		$include_beta   = ! empty($request->get_param('beta'));
 
-		$packages_json = $this->build_packages_json($user_id);
+		$packages_json = $this->build_packages_json($user_id, $include_beta);
 
 		$response = new \WP_REST_Response($packages_json, 200);
 
@@ -139,7 +140,7 @@ class Composer_Repository {
 	 * @param int $user_id The user ID.
 	 * @return array The packages.json structure.
 	 */
-	private function build_packages_json(int $user_id): array {
+	private function build_packages_json(int $user_id, bool $include_beta = false): array {
 
 		$products = Product_Versions::get_user_products_with_versions($user_id);
 		$packages = [];
@@ -155,6 +156,11 @@ class Composer_Repository {
 
 			foreach ($product['versions'] as $version_data) {
 				$version = $version_data['version'];
+
+				// Filter out pre-release versions unless beta is requested
+				if ( ! $include_beta && Product_Versions::is_prerelease($version)) {
+					continue;
+				}
 
 				$packages[$package_name][$version] = [
 					'name'    => $package_name,
