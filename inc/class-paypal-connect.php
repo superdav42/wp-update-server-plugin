@@ -10,9 +10,10 @@
  * REST API namespace: paypal-connect/v1
  *
  * Endpoints:
- *   POST /oauth/init    - Create partner referral URL for merchant onboarding
- *   POST /oauth/verify  - Verify merchant integration status after onboarding
- *   POST /deauthorize   - Notify proxy that a site has disconnected
+ *   POST /oauth/init     - Create partner referral URL for merchant onboarding
+ *   POST /oauth/verify   - Verify merchant integration status after onboarding
+ *   POST /partner-token  - Get a short-lived partner access token for platform fees
+ *   POST /deauthorize    - Notify proxy that a site has disconnected
  *
  * @package WP_Update_Server_Plugin
  * @since 1.0.0
@@ -72,6 +73,16 @@ class PayPal_Connect {
 			[
 				'methods'             => 'POST',
 				'callback'            => [$this, 'handle_oauth_verify'],
+				'permission_callback' => '__return_true',
+			]
+		);
+
+		register_rest_route(
+			self::API_NAMESPACE,
+			'/partner-token',
+			[
+				'methods'             => 'POST',
+				'callback'            => [$this, 'handle_partner_token'],
 				'permission_callback' => '__return_true',
 			]
 		);
@@ -421,6 +432,46 @@ class PayPal_Connect {
 				'trackingId'         => $resp_body['tracking_id'] ?? $tracking_id,
 				'paymentsReceivable' => $resp_body['payments_receivable'] ?? false,
 				'emailConfirmed'     => $resp_body['primary_email_confirmed'] ?? false,
+			],
+			200
+		);
+	}
+
+	/**
+	 * Handle POST /partner-token
+	 *
+	 * Returns a short-lived partner access token and partner client ID.
+	 * Used by the plugin to create PayPal orders with platform fees
+	 * via the PayPal-Auth-Assertion header.
+	 *
+	 * The partner access token alone cannot make payments — it requires
+	 * a PayPal-Auth-Assertion header with a merchant's payer_id that was
+	 * onboarded through our partner referral.
+	 *
+	 * @param \WP_REST_Request $request The request.
+	 * @return \WP_REST_Response
+	 */
+	public function handle_partner_token(\WP_REST_Request $request): \WP_REST_Response {
+
+		$body      = $request->get_json_params();
+		$test_mode = (bool) ($body['testMode'] ?? true);
+
+		$access_token = $this->get_partner_access_token($test_mode);
+
+		if (is_wp_error($access_token)) {
+			return new \WP_REST_Response(
+				['error' => $access_token->get_error_message()],
+				500
+			);
+		}
+
+		$credentials = $this->get_partner_credentials($test_mode);
+
+		return new \WP_REST_Response(
+			[
+				'access_token'      => $access_token,
+				'partner_client_id' => $credentials['client_id'],
+				'expires_in'        => 3300, // ~55 minutes (conservative)
 			],
 			200
 		);
