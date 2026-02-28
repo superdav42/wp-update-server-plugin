@@ -96,6 +96,16 @@ class PayPal_Connect {
 				'permission_callback' => '__return_true',
 			]
 		);
+
+		register_rest_route(
+			self::API_NAMESPACE,
+			'/status',
+			[
+				'methods'             => 'GET',
+				'callback'            => [$this, 'handle_status'],
+				'permission_callback' => '__return_true',
+			]
+		);
 	}
 
 	/**
@@ -472,6 +482,34 @@ class PayPal_Connect {
 				'access_token'      => $access_token,
 				'partner_client_id' => $credentials['client_id'],
 				'expires_in'        => 3300, // ~55 minutes (conservative)
+			],
+			200
+		);
+	}
+
+	/**
+	 * Handle GET /status
+	 *
+	 * Returns whether PayPal OAuth Connect is available.
+	 * OAuth is enabled only when partner credentials are configured
+	 * on the proxy server. Customer sites cache this response.
+	 *
+	 * @param \WP_REST_Request $request The request.
+	 * @return \WP_REST_Response
+	 */
+	public function handle_status(\WP_REST_Request $request): \WP_REST_Response {
+
+		$sandbox_creds = $this->get_partner_credentials(true);
+		$live_creds    = $this->get_partner_credentials(false);
+
+		$sandbox_ready = ! empty($sandbox_creds['client_id']) && ! empty($sandbox_creds['client_secret']);
+		$live_ready    = ! empty($live_creds['client_id']) && ! empty($live_creds['client_secret']);
+
+		return new \WP_REST_Response(
+			[
+				'oauth_enabled'  => $sandbox_ready || $live_ready,
+				'sandbox_ready'  => $sandbox_ready,
+				'live_ready'     => $live_ready,
 			],
 			200
 		);
