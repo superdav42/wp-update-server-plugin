@@ -195,16 +195,19 @@ class Product_Versions {
 			'user_id' => $user_id,
 		]);
 
-		// Group by product
-		$products_map = [];
+		// Group by product, keeping first permission per product for reference
+		$products_map          = [];
+		$reference_permissions = [];
 
 		foreach ($permissions as $permission) {
 			$product_id = $permission->get_product_id();
 
-			if (isset($products_map[$product_id])) {
-				continue; // Already processed this product
+			if ( ! isset($reference_permissions[$product_id])) {
+				$reference_permissions[$product_id] = $permission;
 			}
+		}
 
+		foreach ($reference_permissions as $product_id => $permission) {
 			$product = wc_get_product($product_id);
 
 			if ( ! $product || ! $product->exists()) {
@@ -212,6 +215,9 @@ class Product_Versions {
 			}
 
 			$versions = self::get_all_versions_by_product_id($product_id);
+
+			// Ensure the user has download permissions for all current files
+			self::ensure_download_permissions($product, $permission);
 
 			// Build download URLs for each version
 			$versions_with_urls = [];
@@ -238,6 +244,82 @@ class Product_Versions {
 		}
 
 		return array_values($products_map);
+	}
+
+	/**
+	 * Ensure a user has download permissions for all current files on a product.
+	 *
+	 * When new downloadable files are added to a product after purchase,
+	 * WooCommerce does not automatically grant existing customers permission
+	 * to download them. This method creates the missing permission records
+	 * so customers always have access to all versions of products they own.
+	 *
+	 * @param \WC_Product          $product    The product.
+	 * @param \WC_Customer_Download $permission An existing permission for reference (order, user, etc.).
+	 * @return void
+	 */
+	public static function ensure_download_permissions(\WC_Product $product, \WC_Customer_Download $permission): void {
+
+		$product_id = $product->get_id();
+		$order_id   = $permission->get_order_id();
+		$order      = wc_get_order($order_id);
+
+		if ( ! $order) {
+			return;
+		}
+
+		$files = $product->get_downloads();
+
+		if (empty($files)) {
+			return;
+		}
+
+		/** @var \WC_Customer_Download_Data_Store $downloads_data_store */
+		$downloads_data_store = wc_get_container()->get(LegacyProxy::class)->get_instance_of(\WC_Data_Store::class, 'customer-download');
+
+		// Get all existing permissions for this user + product
+		$existing = $downloads_data_store->get_downloads([
+			'user_id'    => $permission->get_user_id(),
+			'product_id' => $product_id,
+		]);
+
+		$existing_file_ids = [];
+
+		foreach ($existing as $perm) {
+			$existing_file_ids[$perm->get_download_id()] = true;
+		}
+
+		// Capture the access_expires from the reference permission so new
+		// permissions inherit the same subscription expiry window instead of
+		// getting a fresh window calculated from now.
+		$reference_expires = $permission->get_access_expires();
+
+		// Grant permissions for any files the user doesn't have yet
+		foreach ($files as $file_id => $file) {
+			if (isset($existing_file_ids[$file_id])) {
+				continue;
+			}
+
+			wc_downloadable_file_permission($file_id, $product, $order);
+
+			// Sync the expiry to match the existing permission's subscription window.
+			// wc_downloadable_file_permission() calculates expiry from now, which
+			// would bypass the yearly subscription limit.
+			$new_permissions = $downloads_data_store->get_downloads([
+				'user_id'     => $permission->get_user_id(),
+				'product_id'  => $product_id,
+				'download_id' => $file_id,
+				'orderby'     => 'permission_id',
+				'order'       => 'DESC',
+				'limit'       => 1,
+			]);
+
+			if ( ! empty($new_permissions)) {
+				$new_perm = $new_permissions[0];
+				$new_perm->set_access_expires($reference_expires);
+				$new_perm->save();
+			}
+		}
 	}
 
 	/**
@@ -290,6 +372,13 @@ class Product_Versions {
 		}
 
 		$permission = $permissions[0];
+
+		// Ensure user has permissions for all current files
+		$product = wc_get_product($product_id);
+
+		if ($product) {
+			self::ensure_download_permissions($product, $permission);
+		}
 
 		// Find the file ID for the requested version
 		$versions = self::get_all_versions_by_product_id($product_id);

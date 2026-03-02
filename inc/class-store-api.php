@@ -64,55 +64,30 @@ class Store_Api {
 
 		$download_url = '';
 		if ($user_id) {
-			if ($include_beta) {
-				// When beta is requested, find the latest version (including pre-releases)
-				$latest = Product_Versions::get_latest_version_by_product_id($product_id, true);
+			$latest = Product_Versions::get_latest_version_by_product_id($product_id, $include_beta);
 
-				if ($latest && isset($latest['file_id'])) {
-					$permissions = $this->downloads_data_store->get_downloads(
+			if ($latest && isset($latest['file_id'])) {
+				$permissions = $this->downloads_data_store->get_downloads(
+					array(
+						'product_id' => $product_id,
+						'user_id'    => $user_id,
+						'limit'      => 1,
+					)
+				);
+
+				if ( ! empty($permissions)) {
+					// Ensure user has permissions for all current files
+					Product_Versions::ensure_download_permissions($product, $permissions[0]);
+
+					$download_url = add_query_arg(
 						array(
-							'product_id' => $product_id,
-							'user_id'    => $user_id,
-							'limit'      => 1,
-						)
+							'download_file' => $permissions[0]->get_product_id(),
+							'order'         => $permissions[0]->get_order_key(),
+							'email'         => rawurlencode($permissions[0]->get_user_email()),
+							'key'           => $latest['file_id'],
+						),
+						home_url('/')
 					);
-
-					if (! empty($permissions)) {
-						$download_url = add_query_arg(
-							array(
-								'download_file' => $permissions[0]->get_product_id(),
-								'order'         => $permissions[0]->get_order_key(),
-								'email'         => rawurlencode($permissions[0]->get_user_email()),
-								'key'           => $latest['file_id'],
-							),
-							home_url('/')
-						);
-					}
-				}
-			} else {
-				// Find the latest stable version and build a download URL for it
-				$latest_stable = Product_Versions::get_latest_version_by_product_id($product_id, false);
-
-				if ($latest_stable && isset($latest_stable['file_id'])) {
-					$permissions = $this->downloads_data_store->get_downloads(
-						array(
-							'product_id' => $product_id,
-							'user_id'    => $user_id,
-							'limit'      => 1,
-						)
-					);
-
-					if (! empty($permissions)) {
-						$download_url = add_query_arg(
-							array(
-								'download_file' => $permissions[0]->get_product_id(),
-								'order'         => $permissions[0]->get_order_key(),
-								'email'         => rawurlencode($permissions[0]->get_user_email()),
-								'key'           => $latest_stable['file_id'],
-							),
-							home_url('/')
-						);
-					}
 				}
 			}
 		}

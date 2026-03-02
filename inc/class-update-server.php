@@ -76,6 +76,13 @@ class Update_Server extends \Wpup_UpdateServer {
 		if ( ! empty($permissions) ) {
 			$permission = $permissions[0];
 
+			// Ensure the user has permissions for all current files (including newly uploaded versions)
+			$product = wc_get_product($product_id);
+
+			if ($product) {
+				Product_Versions::ensure_download_permissions($product, $permission);
+			}
+
 			return add_query_arg(
 				array(
 					'download_file' => $permission->get_product_id(),
