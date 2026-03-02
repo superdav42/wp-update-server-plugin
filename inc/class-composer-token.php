@@ -52,7 +52,7 @@ class Composer_Token {
 		$display_prefix = self::TOKEN_PREFIX . substr($random_part, 0, 4);
 
 		// Store in database
-		$result = Composer_Token_Table::insert($user_id, $token_hash, $display_prefix, $name);
+		$result = Composer_Token_Table::insert($user_id, $token_hash, $display_prefix, $name, $raw_token);
 
 		if ($result === false) {
 			return false;

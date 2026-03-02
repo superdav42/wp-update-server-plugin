@@ -59,6 +59,11 @@ class Composer_Token_Table {
 		);
 
 		if ($table_exists === $table_name) {
+			// Add token_value column if it doesn't exist (migration)
+			$column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table_name} LIKE 'token_value'");
+			if (empty($column_exists)) {
+				$wpdb->query("ALTER TABLE {$table_name} ADD COLUMN token_value varchar(48) NOT NULL DEFAULT '' AFTER token_prefix");
+			}
 			return;
 		}
 
@@ -67,6 +72,7 @@ class Composer_Token_Table {
 			user_id bigint(20) unsigned NOT NULL,
 			token_hash varchar(64) NOT NULL,
 			token_prefix varchar(12) NOT NULL,
+			token_value varchar(48) NOT NULL DEFAULT '',
 			name varchar(255) NOT NULL DEFAULT 'Default',
 			last_used_at datetime DEFAULT NULL,
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -84,26 +90,28 @@ class Composer_Token_Table {
 	/**
 	 * Insert a new token record.
 	 *
-	 * @param int    $user_id    The user ID.
-	 * @param string $token_hash The SHA-256 hash of the token.
-	 * @param string $prefix     The token prefix for display (e.g., "wu_tk_xxxx").
-	 * @param string $name       The token name.
+	 * @param int    $user_id     The user ID.
+	 * @param string $token_hash  The SHA-256 hash of the token.
+	 * @param string $prefix      The token prefix for display (e.g., "wu_tk_xxxx").
+	 * @param string $name        The token name.
+	 * @param string $token_value The raw token value for display.
 	 * @return int|false The inserted ID or false on failure.
 	 */
-	public static function insert(int $user_id, string $token_hash, string $prefix, string $name = 'Default') {
+	public static function insert(int $user_id, string $token_hash, string $prefix, string $name = 'Default', string $token_value = '') {
 
 		global $wpdb;
 
 		$result = $wpdb->insert(
 			self::get_table_name(),
 			[
-				'user_id'    => $user_id,
-				'token_hash' => $token_hash,
+				'user_id'      => $user_id,
+				'token_hash'   => $token_hash,
 				'token_prefix' => $prefix,
-				'name'       => $name,
-				'created_at' => current_time('mysql'),
+				'token_value'  => $token_value,
+				'name'         => $name,
+				'created_at'   => current_time('mysql'),
 			],
-			['%d', '%s', '%s', '%s', '%s']
+			['%d', '%s', '%s', '%s', '%s', '%s']
 		);
 
 		return $result ? $wpdb->insert_id : false;
@@ -151,7 +159,7 @@ class Composer_Token_Table {
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$results = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT id, user_id, token_prefix, name, last_used_at, created_at, revoked_at
+				"SELECT id, user_id, token_prefix, token_value, name, last_used_at, created_at, revoked_at
 				FROM {$table_name}
 				WHERE user_id = %d{$where_revoked}
 				ORDER BY created_at DESC",

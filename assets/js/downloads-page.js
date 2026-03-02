@@ -177,6 +177,9 @@
 				success: function(response) {
 					if (response.success) {
 						self.tokens = response.data.tokens || [];
+						if (response.data.token) {
+							self.newToken = response.data.token;
+						}
 						self.updateTokenDisplay();
 						self.renderTokensList();
 					} else {
@@ -201,10 +204,11 @@
 				$('.wu-new-token-value').text(this.newToken);
 				this.updateCodeBlocksWithToken(this.newToken);
 			} else if (this.tokens.length > 0) {
-				// Show existing token prefix
+				// Show existing token
 				$('.wu-token-status--has-token').show();
-				$('.wu-token-value').text(this.tokens[0].token_prefix + '...');
-				this.updateCodeBlocksWithToken(this.tokens[0].token_prefix + '...');
+				var displayToken = this.tokens[0].token_value || (this.tokens[0].token_prefix + '...');
+				$('.wu-token-value').text(displayToken);
+				this.updateCodeBlocksWithToken(displayToken);
 			} else {
 				// No tokens
 				$('.wu-token-status--no-token').show();
@@ -249,7 +253,7 @@
 
 				var $row = $('<tr>').html(
 					'<td data-title="Name">' + self.escapeHtml(token.name) + '</td>' +
-					'<td data-title="Token"><span class="wu-token-prefix">' + self.escapeHtml(token.token_prefix) + '...</span></td>' +
+					'<td data-title="Token"><span class="wu-token-prefix">' + self.escapeHtml(token.token_value || (token.token_prefix + '...')) + '</span></td>' +
 					'<td data-title="Created">' + self.formatDate(token.created_at) + '</td>' +
 					'<td data-title="Last Used">' + lastUsed + '</td>' +
 					'<td data-title="Actions">' +

@@ -127,10 +127,22 @@ class Downloads_Page {
 		$user_id = get_current_user_id();
 		$tokens  = Composer_Token::get_user_tokens($user_id);
 
-		wp_send_json_success([
+		$data = [
 			'tokens'         => $tokens,
 			'repository_url' => Composer_Repository::get_repository_url(),
-		]);
+		];
+
+		// Auto-generate a token if user has none
+		if (empty($tokens)) {
+			$raw_token = Composer_Token::generate($user_id, 'Default');
+
+			if ($raw_token !== false) {
+				$data['token']  = $raw_token;
+				$data['tokens'] = Composer_Token::get_user_tokens($user_id);
+			}
+		}
+
+		wp_send_json_success($data);
 	}
 
 	/**
