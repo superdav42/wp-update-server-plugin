@@ -277,10 +277,11 @@ class Product_Versions {
 		/** @var \WC_Customer_Download_Data_Store $downloads_data_store */
 		$downloads_data_store = wc_get_container()->get(LegacyProxy::class)->get_instance_of(\WC_Data_Store::class, 'customer-download');
 
-		// Get all existing permissions for this user + product
+		// Get all existing permissions for this user + product + order
 		$existing = $downloads_data_store->get_downloads([
 			'user_id'    => $permission->get_user_id(),
 			'product_id' => $product_id,
+			'order_id'   => $order_id,
 		]);
 
 		$existing_file_ids = [];
