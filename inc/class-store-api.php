@@ -23,6 +23,7 @@ class Store_Api {
 		add_filter('woocommerce_rest_prepare_product_object', array($this, 'add_product_icon_to_api'), 10, 3);
 		add_filter('woocommerce_product_data_store_cpt_get_products_query', array($this, 'modify_subscription_query'), 10, 3);
 		add_action('pre_get_posts', array($this, 'modify_store_api_subscription_query'), 10);
+		add_action('init', array($this, 'maybe_backfill_download_permissions'), 1);
 		$this->downloads_data_store = wc_get_container()->get(LegacyProxy::class)->get_instance_of(\WC_Data_Store::class, 'customer-download');
 	}
 
@@ -473,5 +474,50 @@ class Store_Api {
 			),
 			home_url('/')
 		);
+	}
+
+	/**
+	 * Backfill download permissions before WooCommerce's download handler runs.
+	 *
+	 * This hooks into 'init' with priority 1, before WC_Download_Handler::download_product()
+	 * (which runs at priority 10). It detects download requests, finds any existing permission
+	 * for the order+product, and ensures all current file versions have permissions.
+	 *
+	 * @return void
+	 */
+	public function maybe_backfill_download_permissions() {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended
+		if ( ! isset($_GET['download_file'], $_GET['order'], $_GET['key']) || empty($_GET['email'])) {
+			return;
+		}
+
+		$product_id = absint($_GET['download_file']);
+		$product    = wc_get_product($product_id);
+
+		if ( ! $product || ! $product->is_downloadable()) {
+			return;
+		}
+
+		$order_key     = wc_clean(wp_unslash($_GET['order']));
+		$email_address = sanitize_email(str_replace(' ', '+', wp_unslash($_GET['email'])));
+
+		// Find any existing permission for this user+order+product
+		$permissions = $this->downloads_data_store->get_downloads(
+			array(
+				'user_email' => $email_address,
+				'order_key'  => $order_key,
+				'product_id' => $product_id,
+				'limit'      => 1,
+			)
+		);
+
+		if (empty($permissions)) {
+			// No permissions at all - WooCommerce will handle the error
+			return;
+		}
+
+		// We have at least one permission - backfill any missing file permissions
+		Product_Versions::ensure_download_permissions($product, $permissions[0]);
+		// phpcs:enable WordPress.Security.NonceVerification.Recommended
 	}
 }
