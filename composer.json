@@ -1,5 +1,5 @@
 {
-    "name": "devstone/wp-update-server-plugin",
+    "name": "ultimate-multisite/ultimate-update-server-plugin",
     "url": "https://wpmultisitewaas.org",
     "description": "Create an update server with Woocommerce downloadable products.",
     "version": "1.0.0",
