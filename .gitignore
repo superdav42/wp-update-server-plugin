@@ -1,2 +1,3 @@
 vendor/yahnis-elsts/cache/*
 vendor/yahnis-elsts/logs/request.log
+.agents/loop-state/
