@@ -87,6 +87,13 @@ class Telemetry_Admin {
 		$passive_wp_versions   = Passive_Installs_Table::get_wp_version_distribution($days);
 		$passive_recent        = Passive_Installs_Table::get_recent_installs(20);
 
+		// PayPal Connect analytics data.
+		$paypal_merchant_counts  = PayPal_Merchants_Table::get_merchant_counts();
+		$paypal_platform_totals  = PayPal_Merchants_Table::get_platform_totals($days);
+		$paypal_merchant_details = PayPal_Merchants_Table::get_merchant_analytics($days, 20);
+		$paypal_recent_merchants = PayPal_Merchants_Table::get_recent_merchants(20);
+		$paypal_last_sync        = PayPal_Transaction_Sync::get_last_sync_time();
+
 		?>
 		<div class="wrap wu-telemetry-dashboard">
 			<h1><?php esc_html_e('Ultimate Multisite Telemetry Dashboard', 'wp-update-server-plugin'); ?></h1>
@@ -142,27 +149,224 @@ class Telemetry_Admin {
 					<div class="wu-telemetry-card-value"><?php echo esc_html(number_format($passive_total)); ?></div>
 					<div class="wu-telemetry-card-label"><?php esc_html_e('unique sites ever seen', 'wp-update-server-plugin'); ?></div>
 				</div>
-				<div class="wu-telemetry-card wu-telemetry-card--passive">
-					<h3><?php esc_html_e('Authenticated Passive', 'wp-update-server-plugin'); ?></h3>
-					<div class="wu-telemetry-card-value"><?php echo esc_html(number_format($passive_authenticated)); ?></div>
-					<div class="wu-telemetry-card-label">
-						<?php
-						printf(
-							/* translators: %d is the number of days */
-							esc_html__('with valid token in last %d days', 'wp-update-server-plugin'),
-							esc_html($days)
-						);
-						?>
-					</div>
-				</div>
-				<div class="wu-telemetry-card">
-					<h3><?php esc_html_e('Error Reports', 'wp-update-server-plugin'); ?></h3>
-					<div class="wu-telemetry-card-value"><?php echo esc_html(count($recent_errors)); ?></div>
-					<div class="wu-telemetry-card-label"><?php esc_html_e('recent errors', 'wp-update-server-plugin'); ?></div>
+			<div class="wu-telemetry-card wu-telemetry-card--passive">
+				<h3><?php esc_html_e('Authenticated Passive', 'wp-update-server-plugin'); ?></h3>
+				<div class="wu-telemetry-card-value"><?php echo esc_html(number_format($passive_authenticated)); ?></div>
+				<div class="wu-telemetry-card-label">
+					<?php
+					printf(
+						/* translators: %d is the number of days */
+						esc_html__('with valid token in last %d days', 'wp-update-server-plugin'),
+						esc_html($days)
+					);
+					?>
 				</div>
 			</div>
+			<div class="wu-telemetry-card">
+				<h3><?php esc_html_e('Error Reports', 'wp-update-server-plugin'); ?></h3>
+				<div class="wu-telemetry-card-value"><?php echo esc_html(count($recent_errors)); ?></div>
+				<div class="wu-telemetry-card-label"><?php esc_html_e('recent errors', 'wp-update-server-plugin'); ?></div>
+			</div>
+			<div class="wu-telemetry-card wu-telemetry-card--paypal">
+				<h3><?php esc_html_e('PayPal Merchants (Live)', 'wp-update-server-plugin'); ?></h3>
+				<div class="wu-telemetry-card-value"><?php echo esc_html(number_format($paypal_merchant_counts['live_onboarded'] + $paypal_merchant_counts['live_active'])); ?></div>
+				<div class="wu-telemetry-card-label"><?php esc_html_e('onboarded / active', 'wp-update-server-plugin'); ?></div>
+			</div>
+			<div class="wu-telemetry-card wu-telemetry-card--paypal">
+				<h3><?php esc_html_e('PayPal Partner Fees', 'wp-update-server-plugin'); ?></h3>
+				<?php $fees_display = $paypal_platform_totals['partner_fees'] > 0 ? '$' . number_format($paypal_platform_totals['partner_fees'] / 100, 2) : '—'; ?>
+				<div class="wu-telemetry-card-value"><?php echo esc_html($fees_display); ?></div>
+				<div class="wu-telemetry-card-label">
+					<?php
+					printf(
+						/* translators: %d is the number of days */
+						esc_html__('last %d days (USD)', 'wp-update-server-plugin'),
+						esc_html($days)
+					);
+					?>
+				</div>
+			</div>
+		</div>
 
-			<!-- Passive Install Tracking -->
+		<!-- PayPal Connect Analytics -->
+		<h2><?php esc_html_e('PayPal Connect Analytics', 'wp-update-server-plugin'); ?></h2>
+		<p class="description">
+			<?php esc_html_e('Merchant onboarding events and partner fee data from the PayPal Connect proxy.', 'wp-update-server-plugin'); ?>
+			<?php if ($paypal_last_sync) : ?>
+				<?php
+				printf(
+					/* translators: %s is the datetime of last sync */
+					esc_html__('Last transaction sync: %s.', 'wp-update-server-plugin'),
+					esc_html($paypal_last_sync)
+				);
+				?>
+			<?php else : ?>
+				<?php esc_html_e('Transaction sync has not run yet (requires PayPal Transaction Search API access).', 'wp-update-server-plugin'); ?>
+			<?php endif; ?>
+		</p>
+
+		<div class="wu-telemetry-grid">
+			<!-- Merchant Status Summary -->
+			<div class="wu-telemetry-section">
+				<h2><?php esc_html_e('Merchant Status', 'wp-update-server-plugin'); ?></h2>
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th><?php esc_html_e('Mode', 'wp-update-server-plugin'); ?></th>
+							<th><?php esc_html_e('Onboarded', 'wp-update-server-plugin'); ?></th>
+							<th><?php esc_html_e('Active', 'wp-update-server-plugin'); ?></th>
+							<th><?php esc_html_e('Disconnected', 'wp-update-server-plugin'); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><?php esc_html_e('Live', 'wp-update-server-plugin'); ?></td>
+							<td><?php echo esc_html(number_format($paypal_merchant_counts['live_onboarded'])); ?></td>
+							<td><?php echo esc_html(number_format($paypal_merchant_counts['live_active'])); ?></td>
+							<td><?php echo esc_html(number_format($paypal_merchant_counts['live_disconnected'])); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e('Sandbox', 'wp-update-server-plugin'); ?></td>
+							<td><?php echo esc_html(number_format($paypal_merchant_counts['sandbox_onboarded'])); ?></td>
+							<td><?php echo esc_html(number_format($paypal_merchant_counts['sandbox_active'])); ?></td>
+							<td><?php echo esc_html(number_format($paypal_merchant_counts['sandbox_disconnected'])); ?></td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<!-- Platform Totals -->
+			<div class="wu-telemetry-section">
+				<h2>
+					<?php
+					printf(
+						/* translators: %d is the number of days */
+						esc_html__('Platform Totals (Last %d Days)', 'wp-update-server-plugin'),
+						esc_html($days)
+					);
+					?>
+				</h2>
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th><?php esc_html_e('Metric', 'wp-update-server-plugin'); ?></th>
+							<th><?php esc_html_e('Value', 'wp-update-server-plugin'); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><?php esc_html_e('Transactions', 'wp-update-server-plugin'); ?></td>
+							<td><?php echo esc_html(number_format($paypal_platform_totals['total_transactions'])); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e('Gross Volume (USD)', 'wp-update-server-plugin'); ?></td>
+							<td>$<?php echo esc_html(number_format($paypal_platform_totals['gross_volume'] / 100, 2)); ?></td>
+						</tr>
+						<tr>
+							<td><?php esc_html_e('Partner Fees (USD)', 'wp-update-server-plugin'); ?></td>
+							<td>$<?php echo esc_html(number_format($paypal_platform_totals['partner_fees'] / 100, 2)); ?></td>
+						</tr>
+					</tbody>
+				</table>
+				<?php if (0 === $paypal_platform_totals['total_transactions']) : ?>
+					<p class="description" style="margin-top: 10px;">
+						<?php esc_html_e('No transaction data yet. Data populates after the daily sync runs (requires PayPal Transaction Search API access).', 'wp-update-server-plugin'); ?>
+					</p>
+				<?php endif; ?>
+			</div>
+		</div>
+
+		<!-- Per-Merchant Analytics -->
+		<?php if ( ! empty($paypal_merchant_details)) : ?>
+		<div class="wu-telemetry-section wu-telemetry-full-width" style="margin-bottom: 20px;">
+			<h2>
+				<?php
+				printf(
+					/* translators: %d is the number of days */
+					esc_html__('Per-Merchant Analytics (Last %d Days)', 'wp-update-server-plugin'),
+					esc_html($days)
+				);
+				?>
+			</h2>
+			<table class="wp-list-table widefat fixed striped">
+				<thead>
+					<tr>
+						<th style="width: 20%;"><?php esc_html_e('Merchant ID', 'wp-update-server-plugin'); ?></th>
+						<th style="width: 10%;"><?php esc_html_e('Status', 'wp-update-server-plugin'); ?></th>
+						<th style="width: 8%;"><?php esc_html_e('Mode', 'wp-update-server-plugin'); ?></th>
+						<th style="width: 10%;"><?php esc_html_e('Transactions', 'wp-update-server-plugin'); ?></th>
+						<th style="width: 15%;"><?php esc_html_e('Gross Volume', 'wp-update-server-plugin'); ?></th>
+						<th style="width: 15%;"><?php esc_html_e('Partner Fees', 'wp-update-server-plugin'); ?></th>
+						<th style="width: 10%;"><?php esc_html_e('Currency', 'wp-update-server-plugin'); ?></th>
+						<th style="width: 12%;"><?php esc_html_e('Last Transaction', 'wp-update-server-plugin'); ?></th>
+					</tr>
+				</thead>
+				<tbody>
+					<?php foreach ($paypal_merchant_details as $row) : ?>
+						<tr>
+							<td><code><?php echo esc_html($row['merchant_id']); ?></code></td>
+							<td><?php echo esc_html(ucfirst($row['status'] ?? '—')); ?></td>
+							<td>
+								<?php if ($row['test_mode']) : ?>
+									<span class="wu-badge wu-badge--sandbox"><?php esc_html_e('Sandbox', 'wp-update-server-plugin'); ?></span>
+								<?php else : ?>
+									<span class="wu-badge wu-badge--live"><?php esc_html_e('Live', 'wp-update-server-plugin'); ?></span>
+								<?php endif; ?>
+							</td>
+							<td><?php echo esc_html(number_format((int) $row['total_transactions'])); ?></td>
+							<td>$<?php echo esc_html(number_format((int) $row['gross_volume'] / 100, 2)); ?></td>
+							<td>$<?php echo esc_html(number_format((int) $row['partner_fees'] / 100, 2)); ?></td>
+							<td><?php echo esc_html($row['currency']); ?></td>
+							<td><?php echo esc_html($row['last_transaction'] ?: '—'); ?></td>
+						</tr>
+					<?php endforeach; ?>
+				</tbody>
+			</table>
+		</div>
+		<?php endif; ?>
+
+		<!-- Recent Merchant Onboarding Events -->
+		<div class="wu-telemetry-section wu-telemetry-full-width" style="margin-bottom: 20px;">
+			<h2><?php esc_html_e('Recent Merchant Onboarding Events', 'wp-update-server-plugin'); ?></h2>
+			<?php if ( ! empty($paypal_recent_merchants)) : ?>
+				<table class="wp-list-table widefat fixed striped">
+					<thead>
+						<tr>
+							<th style="width: 20%;"><?php esc_html_e('Merchant ID', 'wp-update-server-plugin'); ?></th>
+							<th style="width: 20%;"><?php esc_html_e('Tracking ID', 'wp-update-server-plugin'); ?></th>
+							<th style="width: 8%;"><?php esc_html_e('Mode', 'wp-update-server-plugin'); ?></th>
+							<th style="width: 10%;"><?php esc_html_e('Status', 'wp-update-server-plugin'); ?></th>
+							<th style="width: 14%;"><?php esc_html_e('Onboarded At', 'wp-update-server-plugin'); ?></th>
+							<th style="width: 14%;"><?php esc_html_e('Disconnected At', 'wp-update-server-plugin'); ?></th>
+							<th style="width: 14%;"><?php esc_html_e('Last Transaction', 'wp-update-server-plugin'); ?></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php foreach ($paypal_recent_merchants as $row) : ?>
+							<tr>
+								<td><code><?php echo esc_html($row['merchant_id']); ?></code></td>
+								<td><code style="font-size: 11px;"><?php echo esc_html($row['tracking_id'] ?: '—'); ?></code></td>
+								<td>
+									<?php if ($row['test_mode']) : ?>
+										<span class="wu-badge wu-badge--sandbox"><?php esc_html_e('Sandbox', 'wp-update-server-plugin'); ?></span>
+									<?php else : ?>
+										<span class="wu-badge wu-badge--live"><?php esc_html_e('Live', 'wp-update-server-plugin'); ?></span>
+									<?php endif; ?>
+								</td>
+								<td><?php echo esc_html(ucfirst($row['status'])); ?></td>
+								<td><?php echo esc_html($row['onboarded_at']); ?></td>
+								<td><?php echo esc_html($row['disconnected_at'] ?: '—'); ?></td>
+								<td><?php echo esc_html($row['last_transaction'] ?: '—'); ?></td>
+							</tr>
+						<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php else : ?>
+				<p><?php esc_html_e('No merchant onboarding events recorded yet. Events will appear after merchants complete the PayPal Connect onboarding flow.', 'wp-update-server-plugin'); ?></p>
+			<?php endif; ?>
+		</div>
+
+		<!-- Passive Install Tracking -->
 			<h2><?php esc_html_e('Passive Install Tracking', 'wp-update-server-plugin'); ?></h2>
 			<p class="description">
 				<?php esc_html_e('Recorded from update check requests (equivalent to server access log data). No opt-in required.', 'wp-update-server-plugin'); ?>
@@ -597,6 +801,21 @@ class Telemetry_Admin {
 			.wu-badge--no {
 				background: #f3f4f6;
 				color: #6b7280;
+			}
+			.wu-telemetry-card--paypal {
+				border-color: #003087;
+				background: #f0f4ff;
+			}
+			.wu-telemetry-card--paypal .wu-telemetry-card-value {
+				color: #003087;
+			}
+			.wu-badge--live {
+				background: #dbeafe;
+				color: #1e40af;
+			}
+			.wu-badge--sandbox {
+				background: #fef9c3;
+				color: #854d0e;
 			}
 		</style>
 		<?php

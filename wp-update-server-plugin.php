@@ -54,9 +54,13 @@ $wp_update_server_plugin_downloads_page       = new \WP_Update_Server_Plugin\Dow
 // Release notification components
 $wp_update_server_plugin_changelog_manager = new \WP_Update_Server_Plugin\Changelog_Manager();
 
-// PayPal Connect proxy (mirrors Stripe Connect proxy pattern)
+// PayPal Connect proxy and analytics (mirrors Stripe Connect proxy pattern)
+require_once __DIR__ . '/inc/class-paypal-merchants-table.php';
+require_once __DIR__ . '/inc/class-paypal-transaction-sync.php';
 require_once __DIR__ . '/inc/class-paypal-connect.php';
-$wp_update_server_plugin_paypal_connect = new \WP_Update_Server_Plugin\PayPal_Connect();
+$wp_update_server_plugin_paypal_merchants_table = new \WP_Update_Server_Plugin\PayPal_Merchants_Table();
+$wp_update_server_plugin_paypal_transaction_sync = new \WP_Update_Server_Plugin\PayPal_Transaction_Sync();
+$wp_update_server_plugin_paypal_connect          = new \WP_Update_Server_Plugin\PayPal_Connect();
 
 add_action('woocommerce_loaded', function () {
 	require_once __DIR__ . '/inc/class-release-notifier.php';
