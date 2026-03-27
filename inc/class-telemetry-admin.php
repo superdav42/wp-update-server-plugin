@@ -79,6 +79,14 @@ class Telemetry_Admin {
 		$error_summary   = Telemetry_Table::get_error_summary($days);
 		$recent_errors   = Telemetry_Table::get_recent_errors(20);
 
+		// Passive install tracking data.
+		$passive_total         = Passive_Installs_Table::get_unique_install_count();
+		$passive_period        = Passive_Installs_Table::get_unique_install_count($days);
+		$passive_authenticated = Passive_Installs_Table::get_authenticated_install_count($days);
+		$passive_slugs         = Passive_Installs_Table::get_slug_distribution($days, 20);
+		$passive_wp_versions   = Passive_Installs_Table::get_wp_version_distribution($days);
+		$passive_recent        = Passive_Installs_Table::get_recent_installs(20);
+
 		?>
 		<div class="wrap wu-telemetry-dashboard">
 			<h1><?php esc_html_e('Ultimate Multisite Telemetry Dashboard', 'wp-update-server-plugin'); ?></h1>
@@ -105,7 +113,7 @@ class Telemetry_Admin {
 						<?php
 						printf(
 							/* translators: %d is the number of days */
-							esc_html__('in last %d days', 'wp-update-server-plugin'),
+							esc_html__('in last %d days (opt-in)', 'wp-update-server-plugin'),
 							esc_html($days)
 						);
 						?>
@@ -114,13 +122,159 @@ class Telemetry_Admin {
 				<div class="wu-telemetry-card">
 					<h3><?php esc_html_e('Total Sites Ever', 'wp-update-server-plugin'); ?></h3>
 					<div class="wu-telemetry-card-value"><?php echo esc_html(number_format($total_sites)); ?></div>
-					<div class="wu-telemetry-card-label"><?php esc_html_e('all time', 'wp-update-server-plugin'); ?></div>
+					<div class="wu-telemetry-card-label"><?php esc_html_e('all time (opt-in)', 'wp-update-server-plugin'); ?></div>
+				</div>
+				<div class="wu-telemetry-card wu-telemetry-card--passive">
+					<h3><?php esc_html_e('Passive Installs', 'wp-update-server-plugin'); ?></h3>
+					<div class="wu-telemetry-card-value"><?php echo esc_html(number_format($passive_period)); ?></div>
+					<div class="wu-telemetry-card-label">
+						<?php
+						printf(
+							/* translators: %d is the number of days */
+							esc_html__('unique sites in last %d days', 'wp-update-server-plugin'),
+							esc_html($days)
+						);
+						?>
+					</div>
+				</div>
+				<div class="wu-telemetry-card wu-telemetry-card--passive">
+					<h3><?php esc_html_e('Total Passive (All Time)', 'wp-update-server-plugin'); ?></h3>
+					<div class="wu-telemetry-card-value"><?php echo esc_html(number_format($passive_total)); ?></div>
+					<div class="wu-telemetry-card-label"><?php esc_html_e('unique sites ever seen', 'wp-update-server-plugin'); ?></div>
+				</div>
+				<div class="wu-telemetry-card wu-telemetry-card--passive">
+					<h3><?php esc_html_e('Authenticated Passive', 'wp-update-server-plugin'); ?></h3>
+					<div class="wu-telemetry-card-value"><?php echo esc_html(number_format($passive_authenticated)); ?></div>
+					<div class="wu-telemetry-card-label">
+						<?php
+						printf(
+							/* translators: %d is the number of days */
+							esc_html__('with valid token in last %d days', 'wp-update-server-plugin'),
+							esc_html($days)
+						);
+						?>
+					</div>
 				</div>
 				<div class="wu-telemetry-card">
 					<h3><?php esc_html_e('Error Reports', 'wp-update-server-plugin'); ?></h3>
 					<div class="wu-telemetry-card-value"><?php echo esc_html(count($recent_errors)); ?></div>
 					<div class="wu-telemetry-card-label"><?php esc_html_e('recent errors', 'wp-update-server-plugin'); ?></div>
 				</div>
+			</div>
+
+			<!-- Passive Install Tracking -->
+			<h2><?php esc_html_e('Passive Install Tracking', 'wp-update-server-plugin'); ?></h2>
+			<p class="description">
+				<?php esc_html_e('Recorded from update check requests (equivalent to server access log data). No opt-in required.', 'wp-update-server-plugin'); ?>
+			</p>
+
+			<div class="wu-telemetry-grid">
+				<!-- Slug Distribution -->
+				<div class="wu-telemetry-section">
+					<h2><?php esc_html_e('Addon/Plugin Checks', 'wp-update-server-plugin'); ?></h2>
+					<?php if ( ! empty($passive_slugs)) : ?>
+						<table class="wp-list-table widefat fixed striped">
+							<thead>
+								<tr>
+									<th><?php esc_html_e('Slug', 'wp-update-server-plugin'); ?></th>
+									<th><?php esc_html_e('Unique Sites', 'wp-update-server-plugin'); ?></th>
+									<th><?php esc_html_e('Total Checks', 'wp-update-server-plugin'); ?></th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ($passive_slugs as $row) : ?>
+									<tr>
+										<td><code><?php echo esc_html($row['slug_requested']); ?></code></td>
+										<td><?php echo esc_html(number_format((int) $row['unique_sites'])); ?></td>
+										<td><?php echo esc_html(number_format((int) $row['total_checks'])); ?></td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					<?php else : ?>
+						<p><?php esc_html_e('No passive install data yet. Data will appear once sites check for updates.', 'wp-update-server-plugin'); ?></p>
+					<?php endif; ?>
+				</div>
+
+				<!-- WP Version Distribution (Passive) -->
+				<div class="wu-telemetry-section">
+					<h2><?php esc_html_e('WordPress Versions (Passive)', 'wp-update-server-plugin'); ?></h2>
+					<?php if ( ! empty($passive_wp_versions)) : ?>
+						<table class="wp-list-table widefat fixed striped">
+							<thead>
+								<tr>
+									<th><?php esc_html_e('Version', 'wp-update-server-plugin'); ?></th>
+									<th><?php esc_html_e('Sites', 'wp-update-server-plugin'); ?></th>
+									<th><?php esc_html_e('Percentage', 'wp-update-server-plugin'); ?></th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ($passive_wp_versions as $row) : ?>
+									<?php $pct = $passive_period > 0 ? round(((int) $row['count'] / $passive_period) * 100, 1) : 0; ?>
+									<tr>
+										<td><?php echo esc_html($row['wp_version']); ?></td>
+										<td><?php echo esc_html($row['count']); ?></td>
+										<td>
+											<div class="wu-telemetry-bar" style="width: <?php echo esc_attr($pct); ?>%;"></div>
+											<?php echo esc_html($pct); ?>%
+										</td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					<?php else : ?>
+						<p><?php esc_html_e('No data available.', 'wp-update-server-plugin'); ?></p>
+					<?php endif; ?>
+				</div>
+			</div>
+
+			<!-- Recent Passive Installs -->
+			<div class="wu-telemetry-section wu-telemetry-full-width" style="margin-bottom: 20px;">
+				<h2><?php esc_html_e('Recent Passive Installs', 'wp-update-server-plugin'); ?></h2>
+				<?php if ( ! empty($passive_recent)) : ?>
+					<table class="wp-list-table widefat fixed striped">
+						<thead>
+							<tr>
+								<th style="width: 20%;"><?php esc_html_e('Site URL', 'wp-update-server-plugin'); ?></th>
+								<th style="width: 12%;"><?php esc_html_e('IP / Domain', 'wp-update-server-plugin'); ?></th>
+								<th style="width: 8%;"><?php esc_html_e('WP Version', 'wp-update-server-plugin'); ?></th>
+								<th style="width: 15%;"><?php esc_html_e('Slug', 'wp-update-server-plugin'); ?></th>
+								<th style="width: 8%;"><?php esc_html_e('Auth', 'wp-update-server-plugin'); ?></th>
+								<th style="width: 12%;"><?php esc_html_e('First Seen', 'wp-update-server-plugin'); ?></th>
+								<th style="width: 12%;"><?php esc_html_e('Last Seen', 'wp-update-server-plugin'); ?></th>
+								<th style="width: 8%;"><?php esc_html_e('Checks', 'wp-update-server-plugin'); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($passive_recent as $row) : ?>
+								<tr>
+									<td><?php echo esc_html($row['site_url'] ?: '—'); ?></td>
+									<td>
+										<?php if ( ! empty($row['domain'])) : ?>
+											<?php echo esc_html($row['domain']); ?>
+										<?php else : ?>
+											<code><?php echo esc_html($row['ip_address']); ?></code>
+										<?php endif; ?>
+									</td>
+									<td><?php echo esc_html($row['wp_version'] ?: '—'); ?></td>
+									<td><code><?php echo esc_html($row['slug_requested']); ?></code></td>
+									<td>
+										<?php if ($row['is_authenticated']) : ?>
+											<span class="wu-badge wu-badge--yes"><?php esc_html_e('Yes', 'wp-update-server-plugin'); ?></span>
+										<?php else : ?>
+											<span class="wu-badge wu-badge--no"><?php esc_html_e('No', 'wp-update-server-plugin'); ?></span>
+										<?php endif; ?>
+									</td>
+									<td><?php echo esc_html($row['first_seen']); ?></td>
+									<td><?php echo esc_html($row['last_seen']); ?></td>
+									<td><?php echo esc_html(number_format((int) $row['check_count'])); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				<?php else : ?>
+					<p><?php esc_html_e('No passive install records yet.', 'wp-update-server-plugin'); ?></p>
+				<?php endif; ?>
 			</div>
 
 			<div class="wu-telemetry-grid">
@@ -367,6 +521,7 @@ class Telemetry_Admin {
 			}
 			.wu-telemetry-cards {
 				display: flex;
+				flex-wrap: wrap;
 				gap: 20px;
 				margin-bottom: 30px;
 			}
@@ -376,7 +531,15 @@ class Telemetry_Admin {
 				border-radius: 4px;
 				padding: 20px;
 				flex: 1;
+				min-width: 160px;
 				text-align: center;
+			}
+			.wu-telemetry-card--passive {
+				border-color: #00a32a;
+				background: #f0fdf4;
+			}
+			.wu-telemetry-card--passive .wu-telemetry-card-value {
+				color: #00a32a;
 			}
 			.wu-telemetry-card h3 {
 				margin: 0 0 10px;
@@ -418,6 +581,22 @@ class Telemetry_Admin {
 				display: inline-block;
 				margin-right: 8px;
 				min-width: 2px;
+			}
+			.wu-badge {
+				display: inline-block;
+				padding: 2px 8px;
+				border-radius: 3px;
+				font-size: 11px;
+				font-weight: 600;
+				text-transform: uppercase;
+			}
+			.wu-badge--yes {
+				background: #d1fae5;
+				color: #065f46;
+			}
+			.wu-badge--no {
+				background: #f3f4f6;
+				color: #6b7280;
 			}
 		</style>
 		<?php
