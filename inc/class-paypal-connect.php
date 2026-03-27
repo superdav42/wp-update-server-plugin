@@ -114,7 +114,7 @@ class PayPal_Connect {
 	 * @param bool $test_mode Whether to use sandbox.
 	 * @return string
 	 */
-	protected function get_api_base_url(bool $test_mode): string {
+	public function get_api_base_url(bool $test_mode): string {
 
 		return $test_mode ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com';
 	}
@@ -127,7 +127,7 @@ class PayPal_Connect {
 	 * @param bool $test_mode Whether to use sandbox credentials.
 	 * @return array{client_id: string, client_secret: string, merchant_id: string}
 	 */
-	protected function get_partner_credentials(bool $test_mode): array {
+	public function get_partner_credentials(bool $test_mode): array {
 
 		if ($test_mode) {
 			return [
@@ -150,7 +150,7 @@ class PayPal_Connect {
 	 * @param bool $test_mode Whether to use sandbox.
 	 * @return string|\WP_Error
 	 */
-	protected function get_partner_access_token(bool $test_mode) {
+	public function get_partner_access_token(bool $test_mode) {
 
 		$cache_key    = 'wu_pp_proxy_token_' . ($test_mode ? 'sandbox' : 'live');
 		$cached_token = get_transient($cache_key);
@@ -394,7 +394,9 @@ class PayPal_Connect {
 		$credentials = $this->get_partner_credentials($test_mode);
 
 		if (empty($credentials['merchant_id'])) {
-			// Without partner merchant ID, return basic success
+			// Without partner merchant ID, record the onboarding event and return basic success.
+			PayPal_Merchants_Table::upsert_merchant($merchant_id, $tracking_id, $test_mode);
+
 			return new \WP_REST_Response(
 				[
 					'merchantId'         => $merchant_id,
@@ -436,10 +438,16 @@ class PayPal_Connect {
 			);
 		}
 
+		// Record the successful onboarding event.
+		$verified_merchant_id = $resp_body['merchant_id'] ?? $merchant_id;
+		$verified_tracking_id = $resp_body['tracking_id'] ?? $tracking_id;
+
+		PayPal_Merchants_Table::upsert_merchant($verified_merchant_id, $verified_tracking_id, $test_mode);
+
 		return new \WP_REST_Response(
 			[
-				'merchantId'         => $resp_body['merchant_id'] ?? $merchant_id,
-				'trackingId'         => $resp_body['tracking_id'] ?? $tracking_id,
+				'merchantId'         => $verified_merchant_id,
+				'trackingId'         => $verified_tracking_id,
 				'paymentsReceivable' => $resp_body['payments_receivable'] ?? false,
 				'emailConfirmed'     => $resp_body['primary_email_confirmed'] ?? false,
 			],
@@ -519,7 +527,7 @@ class PayPal_Connect {
 	 * Handle POST /deauthorize
 	 *
 	 * Notification that a customer site has disconnected.
-	 * Used for logging/cleanup. Non-blocking from the client side.
+	 * Records the disconnect event in the analytics table and logs for auditing.
 	 *
 	 * @param \WP_REST_Request $request The request.
 	 * @return \WP_REST_Response
@@ -528,12 +536,23 @@ class PayPal_Connect {
 
 		$body = $request->get_json_params();
 
-		$site_url  = $body['siteUrl'] ?? 'unknown';
-		$test_mode = (bool) ($body['testMode'] ?? true);
-		$mode      = $test_mode ? 'sandbox' : 'live';
+		$site_url    = $body['siteUrl'] ?? 'unknown';
+		$merchant_id = $body['merchantId'] ?? '';
+		$test_mode   = (bool) ($body['testMode'] ?? true);
+		$mode        = $test_mode ? 'sandbox' : 'live';
 
-		// Log the disconnect for auditing
-		error_log(sprintf('[PayPal Connect] Site disconnected: %s (mode: %s)', $site_url, $mode));
+		// Record the disconnect event in the analytics table when a merchant ID is provided.
+		if ( ! empty($merchant_id)) {
+			PayPal_Merchants_Table::mark_disconnected($merchant_id, $test_mode);
+		}
+
+		// Log the disconnect for auditing.
+		error_log(sprintf(
+			'[PayPal Connect] Site disconnected: %s (merchant: %s, mode: %s)',
+			$site_url,
+			$merchant_id ?: 'unknown',
+			$mode
+		));
 
 		return new \WP_REST_Response(
 			['success' => true],
