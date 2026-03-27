@@ -185,15 +185,23 @@ class Telemetry_Receiver {
 
 		return new \WP_REST_Response(
 			[
-				'unique_sites'    => Telemetry_Table::get_unique_site_count($days),
-				'php_versions'    => Telemetry_Table::get_php_version_distribution($days),
-				'wp_versions'     => Telemetry_Table::get_wp_version_distribution($days),
-				'plugin_versions' => Telemetry_Table::get_plugin_version_distribution($days),
-				'network_types'   => Telemetry_Table::get_network_type_distribution($days),
-				'gateways'        => Telemetry_Table::get_gateway_usage($days),
-				'addons'          => Telemetry_Table::get_addon_usage($days),
-				'error_summary'   => Telemetry_Table::get_error_summary($days),
-				'period_days'     => $days,
+				'unique_sites'                 => Telemetry_Table::get_unique_site_count($days),
+				'php_versions'                 => Telemetry_Table::get_php_version_distribution($days),
+				'wp_versions'                  => Telemetry_Table::get_wp_version_distribution($days),
+				'plugin_versions'              => Telemetry_Table::get_plugin_version_distribution($days),
+				'network_types'                => Telemetry_Table::get_network_type_distribution($days),
+				'gateways'                     => Telemetry_Table::get_gateway_usage($days),
+				'addons'                       => Telemetry_Table::get_addon_usage($days),
+				'error_summary'                => Telemetry_Table::get_error_summary($days),
+				// Enhanced telemetry (tracker v2.0.0+)
+				'total_subsites'               => Telemetry_Table::get_total_subsites_across_network($days),
+				'subsite_distribution'         => Telemetry_Table::get_subsite_distribution($days),
+				'revenue_distribution'         => Telemetry_Table::get_revenue_distribution($days),
+				'conversion_rate_distribution' => Telemetry_Table::get_conversion_rate_distribution($days),
+				'connect_adoption'             => Telemetry_Table::get_connect_adoption($days),
+				'hosting_providers'            => Telemetry_Table::get_hosting_provider_distribution($days),
+				'membership_distribution'      => Telemetry_Table::get_membership_count_distribution($days),
+				'period_days'                  => $days,
 			],
 			200
 		);

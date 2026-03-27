@@ -79,6 +79,15 @@ class Telemetry_Admin {
 		$error_summary   = Telemetry_Table::get_error_summary($days);
 		$recent_errors   = Telemetry_Table::get_recent_errors(20);
 
+		// Enhanced telemetry (tracker v2.0.0+).
+		$total_subsites          = Telemetry_Table::get_total_subsites_across_network($days);
+		$subsite_distribution    = Telemetry_Table::get_subsite_distribution($days);
+		$revenue_distribution    = Telemetry_Table::get_revenue_distribution($days);
+		$conversion_distribution = Telemetry_Table::get_conversion_rate_distribution($days);
+		$connect_adoption        = Telemetry_Table::get_connect_adoption($days);
+		$hosting_providers       = Telemetry_Table::get_hosting_provider_distribution($days);
+		$membership_distribution = Telemetry_Table::get_membership_count_distribution($days);
+
 		// Passive install tracking data.
 		$passive_total         = Passive_Installs_Table::get_unique_install_count();
 		$passive_period        = Passive_Installs_Table::get_unique_install_count($days);
@@ -453,6 +462,181 @@ class Telemetry_Admin {
 				</div>
 			</div>
 
+			<!-- Enhanced Telemetry (tracker v2.0.0+) -->
+			<?php if ($total_subsites > 0 || ! empty($subsite_distribution) || ! empty($revenue_distribution)) : ?>
+			<h2><?php esc_html_e('Enhanced Network Telemetry', 'wp-update-server-plugin'); ?></h2>
+			<p class="description">
+				<?php esc_html_e('Data from opt-in installations running tracker v2.0.0+. Exact counts reported by consenting networks.', 'wp-update-server-plugin'); ?>
+			</p>
+
+			<!-- Enhanced overview cards -->
+			<div class="wu-telemetry-cards" style="margin-bottom: 30px;">
+				<div class="wu-telemetry-card wu-telemetry-card--enhanced">
+					<h3><?php esc_html_e('Total Subsites Reported', 'wp-update-server-plugin'); ?></h3>
+					<div class="wu-telemetry-card-value"><?php echo esc_html(number_format($total_subsites)); ?></div>
+					<div class="wu-telemetry-card-label">
+						<?php
+						printf(
+							/* translators: %d is the number of days */
+							esc_html__('across all networks in last %d days', 'wp-update-server-plugin'),
+							esc_html($days)
+						);
+						?>
+					</div>
+				</div>
+				<?php if ( ! empty($connect_adoption) && $connect_adoption['total_reporting'] > 0) : ?>
+				<div class="wu-telemetry-card wu-telemetry-card--enhanced">
+					<h3><?php esc_html_e('Stripe Connect Adoption', 'wp-update-server-plugin'); ?></h3>
+					<div class="wu-telemetry-card-value"><?php echo esc_html($connect_adoption['stripe_connect_pct']); ?>%</div>
+					<div class="wu-telemetry-card-label">
+						<?php
+						printf(
+							/* translators: %d is the number of sites */
+							esc_html__('%d of %d reporting networks', 'wp-update-server-plugin'),
+							esc_html($connect_adoption['stripe_connect']),
+							esc_html($connect_adoption['total_reporting'])
+						);
+						?>
+					</div>
+				</div>
+				<div class="wu-telemetry-card wu-telemetry-card--enhanced">
+					<h3><?php esc_html_e('PayPal Connect Adoption', 'wp-update-server-plugin'); ?></h3>
+					<div class="wu-telemetry-card-value"><?php echo esc_html($connect_adoption['paypal_connect_pct']); ?>%</div>
+					<div class="wu-telemetry-card-label">
+						<?php
+						printf(
+							/* translators: %d is the number of sites */
+							esc_html__('%d of %d reporting networks', 'wp-update-server-plugin'),
+							esc_html($connect_adoption['paypal_connect']),
+							esc_html($connect_adoption['total_reporting'])
+						);
+						?>
+					</div>
+				</div>
+				<?php endif; ?>
+			</div>
+
+			<div class="wu-telemetry-grid">
+				<!-- Subsite Distribution -->
+				<?php if ( ! empty($subsite_distribution)) : ?>
+				<div class="wu-telemetry-section">
+					<h2><?php esc_html_e('Subsite Count Distribution', 'wp-update-server-plugin'); ?></h2>
+					<table class="wp-list-table widefat fixed striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e('Subsites per Network', 'wp-update-server-plugin'); ?></th>
+								<th><?php esc_html_e('Networks', 'wp-update-server-plugin'); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($subsite_distribution as $row) : ?>
+								<tr>
+									<td><?php echo esc_html($row['bucket']); ?></td>
+									<td><?php echo esc_html(number_format((int) $row['count'])); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+				<?php endif; ?>
+
+				<!-- Revenue Distribution -->
+				<?php if ( ! empty($revenue_distribution)) : ?>
+				<div class="wu-telemetry-section">
+					<h2><?php esc_html_e('30-Day Revenue Distribution', 'wp-update-server-plugin'); ?></h2>
+					<p class="description"><?php esc_html_e('In site\'s base currency. No FX conversion applied.', 'wp-update-server-plugin'); ?></p>
+					<table class="wp-list-table widefat fixed striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e('Revenue Range', 'wp-update-server-plugin'); ?></th>
+								<th><?php esc_html_e('Networks', 'wp-update-server-plugin'); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($revenue_distribution as $row) : ?>
+								<tr>
+									<td><?php echo esc_html($row['bucket']); ?></td>
+									<td><?php echo esc_html(number_format((int) $row['count'])); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+				<?php endif; ?>
+
+				<!-- Checkout Conversion Rate Distribution -->
+				<?php if ( ! empty($conversion_distribution)) : ?>
+				<div class="wu-telemetry-section">
+					<h2><?php esc_html_e('Checkout Conversion Rates', 'wp-update-server-plugin'); ?></h2>
+					<table class="wp-list-table widefat fixed striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e('Conversion Rate', 'wp-update-server-plugin'); ?></th>
+								<th><?php esc_html_e('Networks', 'wp-update-server-plugin'); ?></th>
+								<th><?php esc_html_e('Avg Rate', 'wp-update-server-plugin'); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($conversion_distribution as $row) : ?>
+								<tr>
+									<td><?php echo esc_html($row['bucket']); ?></td>
+									<td><?php echo esc_html(number_format((int) $row['count'])); ?></td>
+									<td><?php echo esc_html($row['avg_rate_pct']); ?>%</td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+				<?php endif; ?>
+
+				<!-- Active Membership Distribution -->
+				<?php if ( ! empty($membership_distribution)) : ?>
+				<div class="wu-telemetry-section">
+					<h2><?php esc_html_e('Active Memberships Distribution', 'wp-update-server-plugin'); ?></h2>
+					<table class="wp-list-table widefat fixed striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e('Active Memberships', 'wp-update-server-plugin'); ?></th>
+								<th><?php esc_html_e('Networks', 'wp-update-server-plugin'); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($membership_distribution as $row) : ?>
+								<tr>
+									<td><?php echo esc_html($row['bucket']); ?></td>
+									<td><?php echo esc_html(number_format((int) $row['count'])); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+				<?php endif; ?>
+
+				<!-- Hosting Providers -->
+				<?php if ( ! empty($hosting_providers)) : ?>
+				<div class="wu-telemetry-section">
+					<h2><?php esc_html_e('Hosting Providers', 'wp-update-server-plugin'); ?></h2>
+					<table class="wp-list-table widefat fixed striped">
+						<thead>
+							<tr>
+								<th><?php esc_html_e('Provider', 'wp-update-server-plugin'); ?></th>
+								<th><?php esc_html_e('Networks', 'wp-update-server-plugin'); ?></th>
+							</tr>
+						</thead>
+						<tbody>
+							<?php foreach ($hosting_providers as $row) : ?>
+								<tr>
+									<td><?php echo esc_html($row['provider']); ?></td>
+									<td><?php echo esc_html(number_format((int) $row['count'])); ?></td>
+								</tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</div>
+				<?php endif; ?>
+			</div>
+			<?php endif; ?>
+
 			<!-- Error Summary -->
 			<div class="wu-telemetry-section wu-telemetry-full-width">
 				<h2><?php esc_html_e('Error Summary', 'wp-update-server-plugin'); ?></h2>
@@ -540,6 +724,13 @@ class Telemetry_Admin {
 			}
 			.wu-telemetry-card--passive .wu-telemetry-card-value {
 				color: #00a32a;
+			}
+			.wu-telemetry-card--enhanced {
+				border-color: #7c3aed;
+				background: #f5f3ff;
+			}
+			.wu-telemetry-card--enhanced .wu-telemetry-card-value {
+				color: #7c3aed;
 			}
 			.wu-telemetry-card h3 {
 				margin: 0 0 10px;
