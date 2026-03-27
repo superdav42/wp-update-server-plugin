@@ -18,6 +18,9 @@ require_once __DIR__ . '/inc/class-telemetry-receiver.php';
 require_once __DIR__ . '/inc/class-telemetry-admin.php';
 require_once __DIR__ . '/inc/class-passive-installs-table.php';
 require_once __DIR__ . '/inc/class-passive-install-tracker.php';
+require_once __DIR__ . '/inc/class-site-discovery-table.php';
+require_once __DIR__ . '/inc/class-site-discovery-scraper.php';
+require_once __DIR__ . '/inc/class-site-discovery-admin.php';
 require_once __DIR__ . '/inc/class-composer-token-table.php';
 require_once __DIR__ . '/inc/class-composer-token.php';
 require_once __DIR__ . '/inc/class-product-versions.php';
@@ -37,6 +40,11 @@ $wp_update_server_plugin_telemetry_admin    = new \WP_Update_Server_Plugin\Telem
 // Passive install tracking components
 $wp_update_server_plugin_passive_installs_table  = new \WP_Update_Server_Plugin\Passive_Installs_Table();
 $wp_update_server_plugin_passive_install_tracker = new \WP_Update_Server_Plugin\Passive_Install_Tracker();
+
+// Site discovery components (builds on passive install tracking from issue #3)
+$wp_update_server_plugin_site_discovery_table   = new \WP_Update_Server_Plugin\Site_Discovery_Table();
+$wp_update_server_plugin_site_discovery_scraper = new \WP_Update_Server_Plugin\Site_Discovery_Scraper();
+$wp_update_server_plugin_site_discovery_admin   = new \WP_Update_Server_Plugin\Site_Discovery_Admin();
 
 // Composer repository components
 $wp_update_server_plugin_composer_token_table = new \WP_Update_Server_Plugin\Composer_Token_Table();
