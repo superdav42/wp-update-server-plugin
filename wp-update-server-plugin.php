@@ -16,6 +16,8 @@ require_once __DIR__ . '/inc/class-store-api.php';
 require_once __DIR__ . '/inc/class-telemetry-table.php';
 require_once __DIR__ . '/inc/class-telemetry-receiver.php';
 require_once __DIR__ . '/inc/class-telemetry-admin.php';
+require_once __DIR__ . '/inc/class-passive-installs-table.php';
+require_once __DIR__ . '/inc/class-passive-install-tracker.php';
 require_once __DIR__ . '/inc/class-composer-token-table.php';
 require_once __DIR__ . '/inc/class-composer-token.php';
 require_once __DIR__ . '/inc/class-product-versions.php';
@@ -31,6 +33,10 @@ $wp_update_server_plugin_store_api        = new \WP_Update_Server_Plugin\Store_A
 $wp_update_server_plugin_telemetry_table    = new \WP_Update_Server_Plugin\Telemetry_Table();
 $wp_update_server_plugin_telemetry_receiver = new \WP_Update_Server_Plugin\Telemetry_Receiver();
 $wp_update_server_plugin_telemetry_admin    = new \WP_Update_Server_Plugin\Telemetry_Admin();
+
+// Passive install tracking components
+$wp_update_server_plugin_passive_installs_table  = new \WP_Update_Server_Plugin\Passive_Installs_Table();
+$wp_update_server_plugin_passive_install_tracker = new \WP_Update_Server_Plugin\Passive_Install_Tracker();
 
 // Composer repository components
 $wp_update_server_plugin_composer_token_table = new \WP_Update_Server_Plugin\Composer_Token_Table();
