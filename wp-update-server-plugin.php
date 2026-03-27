@@ -58,6 +58,14 @@ $wp_update_server_plugin_changelog_manager = new \WP_Update_Server_Plugin\Change
 require_once __DIR__ . '/inc/class-paypal-connect.php';
 $wp_update_server_plugin_paypal_connect = new \WP_Update_Server_Plugin\PayPal_Connect();
 
+// Stripe Connect analytics (issue #6)
+require_once __DIR__ . '/inc/class-stripe-analytics-table.php';
+require_once __DIR__ . '/inc/class-stripe-analytics.php';
+require_once __DIR__ . '/inc/class-stripe-analytics-admin.php';
+$wp_update_server_plugin_stripe_analytics_table = new \WP_Update_Server_Plugin\Stripe_Analytics_Table();
+$wp_update_server_plugin_stripe_analytics       = new \WP_Update_Server_Plugin\Stripe_Analytics();
+$wp_update_server_plugin_stripe_analytics_admin = new \WP_Update_Server_Plugin\Stripe_Analytics_Admin();
+
 add_action('woocommerce_loaded', function () {
 	require_once __DIR__ . '/inc/class-release-notifier.php';
 	$wp_update_server_plugin_release_notifier  = new \WP_Update_Server_Plugin\Release_Notifier();
