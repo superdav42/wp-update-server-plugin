@@ -1,0 +1,305 @@
+/**
+ * Telemetry Admin Dashboard Styles
+ *
+ * @package WP_Update_Server_Plugin
+ */
+
+/* =========================================================
+   Layout
+   ========================================================= */
+
+.wu-telemetry-dashboard {
+	max-width: 1400px;
+}
+
+.wu-telemetry-period-selector {
+	margin: 20px 0;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.wu-telemetry-period-selector select {
+	min-width: 140px;
+}
+
+/* =========================================================
+   KPI Cards
+   ========================================================= */
+
+.wu-kpi-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 16px;
+	margin-bottom: 32px;
+}
+
+.wu-kpi-card {
+	background: #fff;
+	border: 1px solid #ccd0d4;
+	border-radius: 6px;
+	padding: 20px 16px;
+	text-align: center;
+	transition: box-shadow 0.15s ease;
+}
+
+.wu-kpi-card:hover {
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.wu-kpi-card h3 {
+	margin: 0 0 8px;
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: #646970;
+}
+
+.wu-kpi-value {
+	font-size: 32px;
+	font-weight: 700;
+	line-height: 1.1;
+	color: #2271b1;
+	margin-bottom: 4px;
+}
+
+.wu-kpi-label {
+	font-size: 12px;
+	color: #646970;
+}
+
+/* Card colour variants */
+.wu-kpi-card--passive {
+	border-color: #00a32a;
+	background: #f0fdf4;
+}
+
+.wu-kpi-card--passive .wu-kpi-value {
+	color: #00a32a;
+}
+
+.wu-kpi-card--enhanced {
+	border-color: #7c3aed;
+	background: #f5f3ff;
+}
+
+.wu-kpi-card--enhanced .wu-kpi-value {
+	color: #7c3aed;
+}
+
+.wu-kpi-card--stripe {
+	border-color: #635bff;
+	background: #f0f0ff;
+}
+
+.wu-kpi-card--stripe .wu-kpi-value {
+	color: #635bff;
+}
+
+.wu-kpi-card--paypal {
+	border-color: #003087;
+	background: #f0f4ff;
+}
+
+.wu-kpi-card--paypal .wu-kpi-value {
+	color: #003087;
+}
+
+.wu-kpi-card--warning {
+	border-color: #dba617;
+	background: #fef9e7;
+}
+
+.wu-kpi-card--warning .wu-kpi-value {
+	color: #9a6700;
+}
+
+/* =========================================================
+   Section Grid
+   ========================================================= */
+
+.wu-section-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+	gap: 20px;
+	margin-bottom: 24px;
+}
+
+.wu-section {
+	background: #fff;
+	border: 1px solid #ccd0d4;
+	border-radius: 6px;
+	padding: 20px;
+}
+
+.wu-section--full {
+	grid-column: 1 / -1;
+}
+
+.wu-section h2 {
+	margin: 0 0 16px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid #f0f0f0;
+	font-size: 14px;
+	font-weight: 600;
+	color: #1d2327;
+}
+
+.wu-section-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 16px;
+	padding-bottom: 12px;
+	border-bottom: 1px solid #f0f0f0;
+}
+
+.wu-section-header h2 {
+	margin: 0;
+	padding: 0;
+	border: none;
+}
+
+.wu-section-link {
+	font-size: 12px;
+	text-decoration: none;
+}
+
+/* =========================================================
+   Chart containers
+   ========================================================= */
+
+.wu-chart-container {
+	position: relative;
+	height: 220px;
+	margin-bottom: 8px;
+}
+
+.wu-chart-container--tall {
+	height: 300px;
+}
+
+.wu-chart-container--trend {
+	height: 260px;
+}
+
+/* =========================================================
+   Inline bar (distribution tables)
+   ========================================================= */
+
+.wu-bar-cell {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.wu-bar {
+	flex-shrink: 0;
+	height: 8px;
+	border-radius: 4px;
+	background: #2271b1;
+	min-width: 2px;
+}
+
+.wu-bar--green {
+	background: #00a32a;
+}
+
+.wu-bar--purple {
+	background: #7c3aed;
+}
+
+/* =========================================================
+   Badges
+   ========================================================= */
+
+.wu-badge {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 3px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+}
+
+.wu-badge--yes {
+	background: #d1fae5;
+	color: #065f46;
+}
+
+.wu-badge--no {
+	background: #f3f4f6;
+	color: #6b7280;
+}
+
+.wu-badge--live {
+	background: #dbeafe;
+	color: #1e40af;
+}
+
+.wu-badge--sandbox {
+	background: #fef9c3;
+	color: #854d0e;
+}
+
+/* =========================================================
+   Section dividers / headings
+   ========================================================= */
+
+.wu-dashboard-section-title {
+	margin: 32px 0 16px;
+	padding-bottom: 8px;
+	border-bottom: 2px solid #f0f0f0;
+	font-size: 16px;
+	font-weight: 600;
+	color: #1d2327;
+}
+
+.wu-dashboard-section-title:first-child {
+	margin-top: 0;
+}
+
+.wu-section-description {
+	margin: -8px 0 16px;
+	color: #646970;
+	font-size: 13px;
+}
+
+/* =========================================================
+   Empty states
+   ========================================================= */
+
+.wu-empty {
+	padding: 24px;
+	text-align: center;
+	color: #646970;
+	font-size: 13px;
+}
+
+/* =========================================================
+   Refresh / action bar
+   ========================================================= */
+
+.wu-action-bar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 20px;
+	flex-wrap: wrap;
+}
+
+/* =========================================================
+   Responsive
+   ========================================================= */
+
+@media (max-width: 900px) {
+	.wu-section-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.wu-kpi-grid {
+		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+	}
+}
