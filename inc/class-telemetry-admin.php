@@ -77,7 +77,7 @@ class Telemetry_Admin {
 			'2.0.0'
 		);
 
-		// Chart.js from the WordPress.org CDN mirror (no external CDN dependency).
+		// Chart.js from jsDelivr CDN.
 		wp_enqueue_script(
 			'chartjs',
 			'https://cdn.jsdelivr.net/npm/chart.js@' . self::CHARTJS_VERSION . '/dist/chart.umd.min.js',
@@ -549,13 +549,13 @@ class Telemetry_Admin {
 					<div class="wu-section-header">
 						<h2><?php esc_html_e('Daily Volume Trend (USD)', 'wp-update-server-plugin'); ?></h2>
 					</div>
-					<?php if ( ! empty(Stripe_Analytics_Table::get_daily_trends($days, 'usd'))) : ?>
-						<div class="wu-chart-container wu-chart-container--trend">
-							<canvas id="wu-chart-stripe-trend"></canvas>
-						</div>
-					<?php else : ?>
-						<p class="wu-empty"><?php esc_html_e('No Stripe trend data yet. Run a sync from the Stripe Analytics page.', 'wp-update-server-plugin'); ?></p>
-					<?php endif; ?>
+				<?php if ( ! empty($stripe_trend)) : ?>
+					<div class="wu-chart-container wu-chart-container--trend">
+						<canvas id="wu-chart-stripe-trend"></canvas>
+					</div>
+				<?php else : ?>
+					<p class="wu-empty"><?php esc_html_e('No Stripe trend data yet. Run a sync from the Stripe Analytics page.', 'wp-update-server-plugin'); ?></p>
+				<?php endif; ?>
 				</div>
 
 				<!-- Top accounts -->
@@ -970,26 +970,48 @@ class Telemetry_Admin {
 
 			<div class="wu-section-grid">
 
-				<!-- Subsite distribution chart -->
-				<?php if ( ! empty($subsite_distribution)) : ?>
-				<div class="wu-section">
-					<h2><?php esc_html_e('Subsite Count Distribution', 'wp-update-server-plugin'); ?></h2>
-					<div class="wu-chart-container">
-						<canvas id="wu-chart-subsites"></canvas>
-					</div>
+			<!-- Subsite distribution chart -->
+			<?php if ( ! empty($subsite_distribution)) : ?>
+			<div class="wu-section">
+				<h2><?php esc_html_e('Subsite Count Distribution', 'wp-update-server-plugin'); ?></h2>
+				<div class="wu-chart-container" aria-hidden="true">
+					<canvas id="wu-chart-subsites"></canvas>
 				</div>
-				<?php endif; ?>
+				<details>
+					<summary><?php esc_html_e('Data table', 'wp-update-server-plugin'); ?></summary>
+					<table class="wp-list-table widefat fixed striped">
+						<thead><tr><th><?php esc_html_e('Bucket', 'wp-update-server-plugin'); ?></th><th><?php esc_html_e('Networks', 'wp-update-server-plugin'); ?></th></tr></thead>
+						<tbody>
+							<?php foreach ($subsite_distribution as $row) : ?>
+								<tr><td><?php echo esc_html($row['bucket']); ?></td><td><?php echo esc_html(number_format((int) $row['count'])); ?></td></tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</details>
+			</div>
+			<?php endif; ?>
 
-				<!-- Revenue distribution chart -->
-				<?php if ( ! empty($revenue_distribution)) : ?>
-				<div class="wu-section">
-					<h2><?php esc_html_e('30-Day Revenue Distribution', 'wp-update-server-plugin'); ?></h2>
-					<p class="wu-section-description"><?php esc_html_e("In site's base currency. No FX conversion applied.", 'wp-update-server-plugin'); ?></p>
-					<div class="wu-chart-container">
-						<canvas id="wu-chart-revenue"></canvas>
-					</div>
+			<!-- Revenue distribution chart -->
+			<?php if ( ! empty($revenue_distribution)) : ?>
+			<div class="wu-section">
+				<h2><?php esc_html_e('30-Day Revenue Distribution', 'wp-update-server-plugin'); ?></h2>
+				<p class="wu-section-description"><?php esc_html_e("In site's base currency. No FX conversion applied.", 'wp-update-server-plugin'); ?></p>
+				<div class="wu-chart-container" aria-hidden="true">
+					<canvas id="wu-chart-revenue"></canvas>
 				</div>
-				<?php endif; ?>
+				<details>
+					<summary><?php esc_html_e('Data table', 'wp-update-server-plugin'); ?></summary>
+					<table class="wp-list-table widefat fixed striped">
+						<thead><tr><th><?php esc_html_e('Bucket', 'wp-update-server-plugin'); ?></th><th><?php esc_html_e('Networks', 'wp-update-server-plugin'); ?></th></tr></thead>
+						<tbody>
+							<?php foreach ($revenue_distribution as $row) : ?>
+								<tr><td><?php echo esc_html($row['bucket']); ?></td><td><?php echo esc_html(number_format((int) $row['count'])); ?></td></tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</details>
+			</div>
+			<?php endif; ?>
 
 				<!-- Checkout conversion rates -->
 				<?php if ( ! empty($conversion_distribution)) : ?>
@@ -1039,15 +1061,26 @@ class Telemetry_Admin {
 				</div>
 				<?php endif; ?>
 
-				<!-- Hosting providers chart -->
-				<?php if ( ! empty($hosting_providers)) : ?>
-				<div class="wu-section">
-					<h2><?php esc_html_e('Hosting Providers', 'wp-update-server-plugin'); ?></h2>
-					<div class="wu-chart-container">
-						<canvas id="wu-chart-hosting"></canvas>
-					</div>
+			<!-- Hosting providers chart -->
+			<?php if ( ! empty($hosting_providers)) : ?>
+			<div class="wu-section">
+				<h2><?php esc_html_e('Hosting Providers', 'wp-update-server-plugin'); ?></h2>
+				<div class="wu-chart-container" aria-hidden="true">
+					<canvas id="wu-chart-hosting"></canvas>
 				</div>
-				<?php endif; ?>
+				<details>
+					<summary><?php esc_html_e('Data table', 'wp-update-server-plugin'); ?></summary>
+					<table class="wp-list-table widefat fixed striped">
+						<thead><tr><th><?php esc_html_e('Provider', 'wp-update-server-plugin'); ?></th><th><?php esc_html_e('Networks', 'wp-update-server-plugin'); ?></th></tr></thead>
+						<tbody>
+							<?php foreach ($hosting_providers as $row) : ?>
+								<tr><td><?php echo esc_html($row['provider']); ?></td><td><?php echo esc_html(number_format((int) $row['count'])); ?></td></tr>
+							<?php endforeach; ?>
+						</tbody>
+					</table>
+				</details>
+			</div>
+			<?php endif; ?>
 
 			</div><!-- .wu-section-grid (enhanced) -->
 			<?php endif; ?>
