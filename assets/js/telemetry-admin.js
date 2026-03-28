@@ -64,12 +64,15 @@
 	 * @param {Array}  values    Array of numeric values.
 	 * @param {string} color     Bar fill colour.
 	 * @param {string} border    Bar border colour.
+	 * @param {string} [unit]    Optional unit suffix for tooltip (e.g. 'sites', 'networks').
 	 */
-	function buildBarChart(canvasId, labels, values, color, border) {
+	function buildBarChart(canvasId, labels, values, color, border, unit) {
 		var canvas = document.getElementById(canvasId);
 		if (!canvas) {
 			return;
 		}
+
+		var suffix = unit ? ' ' + unit : '';
 
 		new Chart(canvas, {
 			type: 'bar',
@@ -89,7 +92,7 @@
 					tooltip: {
 						callbacks: {
 							label: function (ctx) {
-								return ' ' + ctx.parsed.x.toLocaleString() + ' sites';
+								return ' ' + ctx.parsed.x.toLocaleString() + suffix;
 							},
 						},
 					},
@@ -240,7 +243,8 @@
 				d.phpVersions.labels,
 				d.phpVersions.values,
 				COLORS.blue,
-				COLORS.blueBorder
+				COLORS.blueBorder,
+				d.phpVersions.unit || 'sites'
 			);
 		}
 
@@ -251,7 +255,8 @@
 				d.wpVersions.labels,
 				d.wpVersions.values,
 				COLORS.green,
-				COLORS.greenBorder
+				COLORS.greenBorder,
+				d.wpVersions.unit || 'sites'
 			);
 		}
 
@@ -262,7 +267,8 @@
 				d.pluginVersions.labels,
 				d.pluginVersions.values,
 				COLORS.purple,
-				COLORS.purpleBorder
+				COLORS.purpleBorder,
+				d.pluginVersions.unit || 'sites'
 			);
 		}
 
@@ -313,7 +319,8 @@
 				d.subsiteDist.labels,
 				d.subsiteDist.values,
 				COLORS.purple,
-				COLORS.purpleBorder
+				COLORS.purpleBorder,
+				d.subsiteDist.unit || 'networks'
 			);
 		}
 
@@ -324,7 +331,8 @@
 				d.revenueDist.labels,
 				d.revenueDist.values,
 				COLORS.green,
-				COLORS.greenBorder
+				COLORS.greenBorder,
+				d.revenueDist.unit || 'networks'
 			);
 		}
 
@@ -335,7 +343,8 @@
 				d.hostingProviders.labels,
 				d.hostingProviders.values,
 				COLORS.orange,
-				COLORS.orangeBorder
+				COLORS.orangeBorder,
+				d.hostingProviders.unit || 'networks'
 			);
 		}
 	}

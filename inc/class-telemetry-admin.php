@@ -21,6 +21,16 @@ class Telemetry_Admin {
 	const CHARTJS_VERSION = '4.4.3';
 
 	/**
+	 * Per-request cache for dashboard data (avoids duplicate DB queries).
+	 *
+	 * Populated on first call to get_dashboard_data() and reused by both
+	 * enqueue_scripts() (for wp_localize_script) and render_dashboard().
+	 *
+	 * @var array<string, mixed>|null
+	 */
+	protected ?array $dashboard_data = null;
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -85,102 +95,38 @@ class Telemetry_Admin {
 			true
 		);
 
-		// Pass chart data to JS.
-		wp_localize_script('wu-telemetry-admin', 'wuTelemetry', $this->get_chart_data());
+		// Pass chart data to JS (uses cached dashboard data — no duplicate queries).
+		$data = $this->get_dashboard_data();
+		wp_localize_script('wu-telemetry-admin', 'wuTelemetry', $data['charts']);
 	}
 
 	/**
-	 * Collect and format all chart data for wp_localize_script.
+	 * Build and cache all dashboard data for the current request.
 	 *
-	 * @return array<string, mixed>
-	 */
-	protected function get_chart_data(): array {
-
-		$days = isset($_GET['days']) ? absint($_GET['days']) : 30; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$days = max(1, min($days, 365));
-
-		// PHP versions.
-		$php_versions = Telemetry_Table::get_php_version_distribution($days);
-		$php_labels   = array_column($php_versions, 'php_version');
-		$php_values   = array_map('intval', array_column($php_versions, 'count'));
-
-		// WP versions.
-		$wp_versions = Telemetry_Table::get_wp_version_distribution($days);
-		$wp_labels   = array_column($wp_versions, 'wp_version');
-		$wp_values   = array_map('intval', array_column($wp_versions, 'count'));
-
-		// Plugin versions.
-		$plugin_versions = Telemetry_Table::get_plugin_version_distribution($days);
-		$pv_labels       = array_column($plugin_versions, 'plugin_version');
-		$pv_values       = array_map('intval', array_column($plugin_versions, 'count'));
-
-		// Gateways.
-		$gateways     = Telemetry_Table::get_gateway_usage($days);
-		$gw_labels    = array_map('ucfirst', array_keys($gateways));
-		$gw_values    = array_values($gateways);
-
-		// Addons.
-		$addons      = Telemetry_Table::get_addon_usage($days);
-		$addon_labels = array_keys($addons);
-		$addon_values = array_values($addons);
-
-		// Subsite distribution.
-		$subsite_dist = Telemetry_Table::get_subsite_distribution($days);
-		$ss_labels    = array_column($subsite_dist, 'bucket');
-		$ss_values    = array_map('intval', array_column($subsite_dist, 'count'));
-
-		// Revenue distribution.
-		$rev_dist   = Telemetry_Table::get_revenue_distribution($days);
-		$rev_labels = array_column($rev_dist, 'bucket');
-		$rev_values = array_map('intval', array_column($rev_dist, 'count'));
-
-		// Hosting providers.
-		$hosting        = Telemetry_Table::get_hosting_provider_distribution($days);
-		$host_labels    = array_column($hosting, 'provider');
-		$host_values    = array_map('intval', array_column($hosting, 'count'));
-
-		// Stripe daily trend (currency defaults to USD).
-		$stripe_trend  = Stripe_Analytics_Table::get_daily_trends($days, 'usd');
-		$stripe_labels = array_column($stripe_trend, 'period_date');
-		$stripe_gross  = array_map(
-			function ($r) { return round((int) $r['gross_volume'] / 100, 2); },
-			$stripe_trend
-		);
-		$stripe_fees   = array_map(
-			function ($r) { return round((int) $r['application_fees'] / 100, 2); },
-			$stripe_trend
-		);
-
-		return [
-			'phpVersions'     => ['labels' => $php_labels, 'values' => $php_values],
-			'wpVersions'      => ['labels' => $wp_labels, 'values' => $wp_values],
-			'pluginVersions'  => ['labels' => $pv_labels, 'values' => $pv_values],
-			'gateways'        => ['labels' => $gw_labels, 'values' => $gw_values],
-			'addons'          => ['labels' => $addon_labels, 'values' => $addon_values],
-			'subsiteDist'     => ['labels' => $ss_labels, 'values' => $ss_values],
-			'revenueDist'     => ['labels' => $rev_labels, 'values' => $rev_values],
-			'hostingProviders'=> ['labels' => $host_labels, 'values' => $host_values],
-			'stripeTrend'     => [
-				'labels'      => $stripe_labels,
-				'grossVolume' => $stripe_gross,
-				'appFees'     => $stripe_fees,
-			],
-		];
-	}
-
-	/**
-	 * Render the unified analytics dashboard.
+	 * Called by both enqueue_scripts() (for wp_localize_script) and
+	 * render_dashboard() so that expensive DB aggregates run only once per
+	 * page load regardless of call order.
 	 *
-	 * @return void
+	 * @return array<string, mixed> {
+	 *     @type int   $days                    Selected period in days.
+	 *     @type array $charts                  Chart.js-ready data arrays.
+	 *     @type array $telemetry               Opt-in telemetry rows.
+	 *     @type array $passive                 Passive install rows.
+	 *     @type array $stripe                  Stripe analytics rows.
+	 *     @type array $paypal                  PayPal analytics rows.
+	 *     @type int   $total_error_count        Total error count (not capped).
+	 * }
 	 */
-	public function render_dashboard(): void {
+	protected function get_dashboard_data(): array {
+
+		if (null !== $this->dashboard_data) {
+			return $this->dashboard_data;
+		}
 
 		$days = isset($_GET['days']) ? absint($_GET['days']) : 30; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$days = max(1, min($days, 365));
 
 		// ── Opt-in telemetry ──────────────────────────────────────────────────
-		$unique_sites            = Telemetry_Table::get_unique_site_count($days);
-		$total_sites             = Telemetry_Table::get_unique_site_count();
 		$php_versions            = Telemetry_Table::get_php_version_distribution($days);
 		$wp_versions             = Telemetry_Table::get_wp_version_distribution($days);
 		$plugin_versions         = Telemetry_Table::get_plugin_version_distribution($days);
@@ -189,6 +135,7 @@ class Telemetry_Admin {
 		$addons                  = Telemetry_Table::get_addon_usage($days);
 		$error_summary           = Telemetry_Table::get_error_summary($days);
 		$recent_errors           = Telemetry_Table::get_recent_errors(20);
+		$total_error_count       = array_sum(array_column($error_summary, 'count'));
 
 		// Enhanced telemetry (tracker v2.0.0+).
 		$total_subsites          = Telemetry_Table::get_total_subsites_across_network($days);
@@ -208,10 +155,11 @@ class Telemetry_Admin {
 		$passive_recent        = Passive_Installs_Table::get_recent_installs(20);
 
 		// ── Stripe Connect analytics ──────────────────────────────────────────
-		$stripe_totals    = Stripe_Analytics_Table::get_platform_totals($days, 'usd');
-		$stripe_accounts  = Stripe_Analytics_Table::get_account_counts($days);
-		$stripe_top       = Stripe_Analytics_Table::get_top_accounts(10, $days, 'usd');
-		$stripe_fee_waiver= Stripe_Analytics_Table::get_fee_waiver_impact($days, 'usd');
+		$stripe_totals     = Stripe_Analytics_Table::get_platform_totals($days, 'usd');
+		$stripe_accounts   = Stripe_Analytics_Table::get_account_counts($days);
+		$stripe_top        = Stripe_Analytics_Table::get_top_accounts(10, $days, 'usd');
+		$stripe_fee_waiver = Stripe_Analytics_Table::get_fee_waiver_impact($days, 'usd');
+		$stripe_trend      = Stripe_Analytics_Table::get_daily_trends($days, 'usd');
 
 		// ── PayPal Connect analytics ──────────────────────────────────────────
 		$paypal_merchant_counts  = PayPal_Merchants_Table::get_merchant_counts();
@@ -220,7 +168,151 @@ class Telemetry_Admin {
 		$paypal_recent_merchants = PayPal_Merchants_Table::get_recent_merchants(20);
 		$paypal_last_sync        = PayPal_Transaction_Sync::get_last_sync_time();
 
-		// ── Derived values ────────────────────────────────────────────────────
+		// ── Chart.js data arrays ──────────────────────────────────────────────
+		$stripe_labels = array_column($stripe_trend, 'period_date');
+		$stripe_gross  = array_map(
+			function ($r) { return round((int) $r['gross_volume'] / 100, 2); },
+			$stripe_trend
+		);
+		$stripe_fees_arr = array_map(
+			function ($r) { return round((int) $r['application_fees'] / 100, 2); },
+			$stripe_trend
+		);
+
+		$charts = [
+			'phpVersions'      => [
+				'labels' => array_column($php_versions, 'php_version'),
+				'values' => array_map('intval', array_column($php_versions, 'count')),
+				'unit'   => 'sites',
+			],
+			'wpVersions'       => [
+				'labels' => array_column($wp_versions, 'wp_version'),
+				'values' => array_map('intval', array_column($wp_versions, 'count')),
+				'unit'   => 'sites',
+			],
+			'pluginVersions'   => [
+				'labels' => array_column($plugin_versions, 'plugin_version'),
+				'values' => array_map('intval', array_column($plugin_versions, 'count')),
+				'unit'   => 'sites',
+			],
+			'gateways'         => [
+				'labels' => array_map('ucfirst', array_keys($gateways)),
+				'values' => array_values($gateways),
+				'unit'   => 'sites',
+			],
+			'addons'           => [
+				'labels' => array_keys($addons),
+				'values' => array_values($addons),
+				'unit'   => 'sites',
+			],
+			'subsiteDist'      => [
+				'labels' => array_column($subsite_distribution, 'bucket'),
+				'values' => array_map('intval', array_column($subsite_distribution, 'count')),
+				'unit'   => 'networks',
+			],
+			'revenueDist'      => [
+				'labels' => array_column($revenue_distribution, 'bucket'),
+				'values' => array_map('intval', array_column($revenue_distribution, 'count')),
+				'unit'   => 'networks',
+			],
+			'hostingProviders' => [
+				'labels' => array_column($hosting_providers, 'provider'),
+				'values' => array_map('intval', array_column($hosting_providers, 'count')),
+				'unit'   => 'networks',
+			],
+			'stripeTrend'      => [
+				'labels'      => $stripe_labels,
+				'grossVolume' => $stripe_gross,
+				'appFees'     => $stripe_fees_arr,
+			],
+		];
+
+		$this->dashboard_data = [
+			'days'             => $days,
+			'charts'           => $charts,
+			'telemetry'        => compact(
+				'php_versions', 'wp_versions', 'plugin_versions', 'network_types',
+				'gateways', 'addons', 'error_summary', 'recent_errors',
+				'total_subsites', 'subsite_distribution', 'revenue_distribution',
+				'conversion_distribution', 'connect_adoption', 'hosting_providers',
+				'membership_distribution'
+			),
+			'passive'          => compact(
+				'passive_total', 'passive_period', 'passive_authenticated',
+				'passive_slugs', 'passive_wp_versions', 'passive_recent'
+			),
+			'stripe'           => compact(
+				'stripe_totals', 'stripe_accounts', 'stripe_top',
+				'stripe_fee_waiver', 'stripe_trend'
+			),
+			'paypal'           => compact(
+				'paypal_merchant_counts', 'paypal_platform_totals',
+				'paypal_merchant_details', 'paypal_recent_merchants', 'paypal_last_sync'
+			),
+			'total_error_count' => $total_error_count,
+			'unique_sites'      => Telemetry_Table::get_unique_site_count($days),
+			'total_sites'       => Telemetry_Table::get_unique_site_count(),
+		];
+
+		return $this->dashboard_data;
+	}
+
+	/**
+	 * Render the unified analytics dashboard.
+	 *
+	 * @return void
+	 */
+	public function render_dashboard(): void {
+
+		// Use cached data — avoids duplicate DB queries when enqueue_scripts()
+		// already called get_dashboard_data() earlier in the same request.
+		$d = $this->get_dashboard_data();
+
+		$days = $d['days'];
+
+		// Unpack telemetry.
+		$unique_sites            = $d['unique_sites'];
+		$total_sites             = $d['total_sites'];
+		$php_versions            = $d['telemetry']['php_versions'];
+		$wp_versions             = $d['telemetry']['wp_versions'];
+		$plugin_versions         = $d['telemetry']['plugin_versions'];
+		$network_types           = $d['telemetry']['network_types'];
+		$gateways                = $d['telemetry']['gateways'];
+		$addons                  = $d['telemetry']['addons'];
+		$error_summary           = $d['telemetry']['error_summary'];
+		$recent_errors           = $d['telemetry']['recent_errors'];
+		$total_error_count       = $d['total_error_count'];
+		$total_subsites          = $d['telemetry']['total_subsites'];
+		$subsite_distribution    = $d['telemetry']['subsite_distribution'];
+		$revenue_distribution    = $d['telemetry']['revenue_distribution'];
+		$conversion_distribution = $d['telemetry']['conversion_distribution'];
+		$connect_adoption        = $d['telemetry']['connect_adoption'];
+		$hosting_providers       = $d['telemetry']['hosting_providers'];
+		$membership_distribution = $d['telemetry']['membership_distribution'];
+
+		// Unpack passive.
+		$passive_total         = $d['passive']['passive_total'];
+		$passive_period        = $d['passive']['passive_period'];
+		$passive_authenticated = $d['passive']['passive_authenticated'];
+		$passive_slugs         = $d['passive']['passive_slugs'];
+		$passive_wp_versions   = $d['passive']['passive_wp_versions'];
+		$passive_recent        = $d['passive']['passive_recent'];
+
+		// Unpack Stripe.
+		$stripe_totals     = $d['stripe']['stripe_totals'];
+		$stripe_accounts   = $d['stripe']['stripe_accounts'];
+		$stripe_top        = $d['stripe']['stripe_top'];
+		$stripe_fee_waiver = $d['stripe']['stripe_fee_waiver'];
+		$stripe_trend      = $d['stripe']['stripe_trend'];
+
+		// Unpack PayPal.
+		$paypal_merchant_counts  = $d['paypal']['paypal_merchant_counts'];
+		$paypal_platform_totals  = $d['paypal']['paypal_platform_totals'];
+		$paypal_merchant_details = $d['paypal']['paypal_merchant_details'];
+		$paypal_recent_merchants = $d['paypal']['paypal_recent_merchants'];
+		$paypal_last_sync        = $d['paypal']['paypal_last_sync'];
+
+		// ── Derived display values ────────────────────────────────────────────
 		$stripe_gross_display = '$' . number_format($stripe_totals['gross_volume'] / 100, 2);
 		$stripe_fees_display  = '$' . number_format($stripe_totals['application_fees'] / 100, 2);
 		$paypal_fees_display  = $paypal_platform_totals['partner_fees'] > 0
@@ -378,8 +470,16 @@ class Telemetry_Admin {
 				<!-- Errors -->
 				<div class="wu-kpi-card wu-kpi-card--warning">
 					<h3><?php esc_html_e('Error Reports', 'wp-update-server-plugin'); ?></h3>
-					<div class="wu-kpi-value"><?php echo esc_html(count($recent_errors)); ?></div>
-					<div class="wu-kpi-label"><?php esc_html_e('recent errors', 'wp-update-server-plugin'); ?></div>
+					<div class="wu-kpi-value"><?php echo esc_html(number_format($total_error_count)); ?></div>
+					<div class="wu-kpi-label">
+						<?php
+						printf(
+							/* translators: %d is the number of days */
+							esc_html__('in last %d days', 'wp-update-server-plugin'),
+							esc_html($days)
+						);
+						?>
+					</div>
 				</div>
 
 				<?php if ( ! empty($connect_adoption) && $connect_adoption['total_reporting'] > 0) : ?>
@@ -713,9 +813,20 @@ class Telemetry_Admin {
 				<div class="wu-section">
 					<h2><?php esc_html_e('PHP Versions', 'wp-update-server-plugin'); ?></h2>
 					<?php if ( ! empty($php_versions)) : ?>
-						<div class="wu-chart-container">
+						<div class="wu-chart-container" aria-hidden="true">
 							<canvas id="wu-chart-php"></canvas>
 						</div>
+						<details>
+							<summary><?php esc_html_e('Data table', 'wp-update-server-plugin'); ?></summary>
+							<table class="wp-list-table widefat fixed striped">
+								<thead><tr><th><?php esc_html_e('Version', 'wp-update-server-plugin'); ?></th><th><?php esc_html_e('Sites', 'wp-update-server-plugin'); ?></th></tr></thead>
+								<tbody>
+									<?php foreach ($php_versions as $row) : ?>
+										<tr><td><?php echo esc_html($row['php_version']); ?></td><td><?php echo esc_html(number_format((int) $row['count'])); ?></td></tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+						</details>
 					<?php else : ?>
 						<p class="wu-empty"><?php esc_html_e('No data available.', 'wp-update-server-plugin'); ?></p>
 					<?php endif; ?>
@@ -725,9 +836,20 @@ class Telemetry_Admin {
 				<div class="wu-section">
 					<h2><?php esc_html_e('WordPress Versions', 'wp-update-server-plugin'); ?></h2>
 					<?php if ( ! empty($wp_versions)) : ?>
-						<div class="wu-chart-container">
+						<div class="wu-chart-container" aria-hidden="true">
 							<canvas id="wu-chart-wp"></canvas>
 						</div>
+						<details>
+							<summary><?php esc_html_e('Data table', 'wp-update-server-plugin'); ?></summary>
+							<table class="wp-list-table widefat fixed striped">
+								<thead><tr><th><?php esc_html_e('Version', 'wp-update-server-plugin'); ?></th><th><?php esc_html_e('Sites', 'wp-update-server-plugin'); ?></th></tr></thead>
+								<tbody>
+									<?php foreach ($wp_versions as $row) : ?>
+										<tr><td><?php echo esc_html($row['wp_version']); ?></td><td><?php echo esc_html(number_format((int) $row['count'])); ?></td></tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+						</details>
 					<?php else : ?>
 						<p class="wu-empty"><?php esc_html_e('No data available.', 'wp-update-server-plugin'); ?></p>
 					<?php endif; ?>
@@ -737,9 +859,20 @@ class Telemetry_Admin {
 				<div class="wu-section">
 					<h2><?php esc_html_e('Plugin Versions', 'wp-update-server-plugin'); ?></h2>
 					<?php if ( ! empty($plugin_versions)) : ?>
-						<div class="wu-chart-container">
+						<div class="wu-chart-container" aria-hidden="true">
 							<canvas id="wu-chart-plugin"></canvas>
 						</div>
+						<details>
+							<summary><?php esc_html_e('Data table', 'wp-update-server-plugin'); ?></summary>
+							<table class="wp-list-table widefat fixed striped">
+								<thead><tr><th><?php esc_html_e('Version', 'wp-update-server-plugin'); ?></th><th><?php esc_html_e('Sites', 'wp-update-server-plugin'); ?></th></tr></thead>
+								<tbody>
+									<?php foreach ($plugin_versions as $row) : ?>
+										<tr><td><?php echo esc_html($row['plugin_version']); ?></td><td><?php echo esc_html(number_format((int) $row['count'])); ?></td></tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+						</details>
 					<?php else : ?>
 						<p class="wu-empty"><?php esc_html_e('No data available.', 'wp-update-server-plugin'); ?></p>
 					<?php endif; ?>
@@ -782,9 +915,20 @@ class Telemetry_Admin {
 				<div class="wu-section">
 					<h2><?php esc_html_e('Payment Gateways', 'wp-update-server-plugin'); ?></h2>
 					<?php if ( ! empty($gateways)) : ?>
-						<div class="wu-chart-container">
+						<div class="wu-chart-container" aria-hidden="true">
 							<canvas id="wu-chart-gateways"></canvas>
 						</div>
+						<details>
+							<summary><?php esc_html_e('Data table', 'wp-update-server-plugin'); ?></summary>
+							<table class="wp-list-table widefat fixed striped">
+								<thead><tr><th><?php esc_html_e('Gateway', 'wp-update-server-plugin'); ?></th><th><?php esc_html_e('Sites', 'wp-update-server-plugin'); ?></th></tr></thead>
+								<tbody>
+									<?php foreach ($gateways as $gateway => $count) : ?>
+										<tr><td><?php echo esc_html(ucfirst($gateway)); ?></td><td><?php echo esc_html(number_format((int) $count)); ?></td></tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+						</details>
 					<?php else : ?>
 						<p class="wu-empty"><?php esc_html_e('No data available.', 'wp-update-server-plugin'); ?></p>
 					<?php endif; ?>
@@ -794,9 +938,20 @@ class Telemetry_Admin {
 				<div class="wu-section">
 					<h2><?php esc_html_e('Active Addons', 'wp-update-server-plugin'); ?></h2>
 					<?php if ( ! empty($addons)) : ?>
-						<div class="wu-chart-container">
+						<div class="wu-chart-container" aria-hidden="true">
 							<canvas id="wu-chart-addons"></canvas>
 						</div>
+						<details>
+							<summary><?php esc_html_e('Data table', 'wp-update-server-plugin'); ?></summary>
+							<table class="wp-list-table widefat fixed striped">
+								<thead><tr><th><?php esc_html_e('Addon', 'wp-update-server-plugin'); ?></th><th><?php esc_html_e('Sites', 'wp-update-server-plugin'); ?></th></tr></thead>
+								<tbody>
+									<?php foreach ($addons as $addon => $count) : ?>
+										<tr><td><?php echo esc_html($addon); ?></td><td><?php echo esc_html(number_format((int) $count)); ?></td></tr>
+									<?php endforeach; ?>
+								</tbody>
+							</table>
+						</details>
 					<?php else : ?>
 						<p class="wu-empty"><?php esc_html_e('No addon data available.', 'wp-update-server-plugin'); ?></p>
 					<?php endif; ?>
