@@ -24,7 +24,22 @@ class Store_Api {
 		add_filter('woocommerce_product_data_store_cpt_get_products_query', array($this, 'modify_subscription_query'), 10, 3);
 		add_action('pre_get_posts', array($this, 'modify_store_api_subscription_query'), 10);
 		add_action('init', array($this, 'maybe_backfill_download_permissions'), 1);
-		$this->downloads_data_store = wc_get_container()->get(LegacyProxy::class)->get_instance_of(\WC_Data_Store::class, 'customer-download');
+	}
+
+	/**
+	 * Get the downloads data store, initializing lazily to avoid calling
+	 * wc_get_container() before WooCommerce is loaded.
+	 *
+	 * @return \WC_Data_Store|null
+	 */
+	private function get_downloads_data_store() {
+		if (null === $this->downloads_data_store) {
+			if (! function_exists('wc_get_container')) {
+				return null;
+			}
+			$this->downloads_data_store = wc_get_container()->get(LegacyProxy::class)->get_instance_of(\WC_Data_Store::class, 'customer-download');
+		}
+		return $this->downloads_data_store;
 	}
 
 	/**
@@ -64,11 +79,12 @@ class Store_Api {
 		$user_id = apply_filters('determine_current_user', null);
 
 		$download_url = '';
-		if ($user_id) {
+		$data_store = $this->get_downloads_data_store();
+		if ($user_id && $data_store) {
 			$latest = Product_Versions::get_latest_version_by_product_id($product_id, $include_beta);
 
 			if ($latest && isset($latest['file_id'])) {
-				$permissions = $this->downloads_data_store->get_downloads(
+				$permissions = $data_store->get_downloads(
 					array(
 						'product_id' => $product_id,
 						'user_id'    => $user_id,
@@ -491,6 +507,11 @@ class Store_Api {
 			return;
 		}
 
+		$data_store = $this->get_downloads_data_store();
+		if ( ! $data_store) {
+			return;
+		}
+
 		$product_id = absint($_GET['download_file']);
 		$product    = wc_get_product($product_id);
 
@@ -502,7 +523,7 @@ class Store_Api {
 		$email_address = sanitize_email(str_replace(' ', '+', wp_unslash($_GET['email'])));
 
 		// Find any existing permission for this user+order+product
-		$permissions = $this->downloads_data_store->get_downloads(
+		$permissions = $data_store->get_downloads(
 			array(
 				'user_email' => $email_address,
 				'order_key'  => $order_key,
