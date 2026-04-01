@@ -40,7 +40,7 @@ class PayPal_Connect {
 	 *
 	 * @var string
 	 */
-	const BN_CODE = 'UltimateMultisite_SP_PPCP';
+	const BN_CODE = 'ULTIMATE_SP_PPCP';
 
 	/**
 	 * Constructor.
