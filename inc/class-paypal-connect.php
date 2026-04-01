@@ -276,7 +276,7 @@ class PayPal_Connect {
 					],
 				],
 			],
-			'products'                => ['EXPRESS_CHECKOUT'],
+			'products'                => ['PPCP'],
 			'legal_consents'          => [
 				[
 					'type'    => 'SHARE_DATA_CONSENT',
