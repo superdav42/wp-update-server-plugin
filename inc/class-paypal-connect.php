@@ -270,6 +270,7 @@ class PayPal_Connect {
 									'REFUND',
 									'PARTNER_FEE',
 									'DELAY_FUNDS_DISBURSEMENT',
+									'ACCESS_MERCHANT_INFORMATION',
 								],
 							],
 						],
