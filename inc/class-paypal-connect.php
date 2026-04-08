@@ -51,6 +51,51 @@ class PayPal_Connect {
 	}
 
 	/**
+	 * Log a PayPal Connect proxy event.
+	 *
+	 * Writes to the PHP error log with a consistent prefix so entries are easy
+	 * to grep. Sensitive values (access tokens, client secrets, credentials)
+	 * must NEVER be passed to this method — only request metadata, response
+	 * codes, PayPal debug IDs, and error messages.
+	 *
+	 * @param string $message The message to log.
+	 * @param array  $context Optional context data (will be JSON-encoded).
+	 * @return void
+	 */
+	protected function log(string $message, array $context = []): void {
+
+		$line = '[PayPal Connect] ' . $message;
+
+		if (! empty($context)) {
+			$line .= ' ' . wp_json_encode($context);
+		}
+
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
+		error_log($line);
+	}
+
+	/**
+	 * Extract the PayPal-Debug-Id header from a response.
+	 *
+	 * PayPal returns this header on every API response. It is the single most
+	 * important value for debugging failed calls — PayPal support and the
+	 * integration review team ask for it by name.
+	 *
+	 * @param array|\WP_Error $response The wp_remote_* response.
+	 * @return string The debug ID, or empty string if not present.
+	 */
+	protected function get_debug_id($response): string {
+
+		if (is_wp_error($response)) {
+			return '';
+		}
+
+		$debug_id = wp_remote_retrieve_header($response, 'paypal-debug-id');
+
+		return is_string($debug_id) ? $debug_id : '';
+	}
+
+	/**
 	 * Register REST API routes.
 	 *
 	 * @return void
@@ -181,17 +226,35 @@ class PayPal_Connect {
 		);
 
 		if (is_wp_error($response)) {
+			$this->log('Partner access token request failed (transport error)', [
+				'mode'  => $test_mode ? 'sandbox' : 'live',
+				'error' => $response->get_error_message(),
+			]);
+
 			return $response;
 		}
 
-		$body = json_decode(wp_remote_retrieve_body($response), true);
-		$code = wp_remote_retrieve_response_code($response);
+		$body     = json_decode(wp_remote_retrieve_body($response), true);
+		$code     = wp_remote_retrieve_response_code($response);
+		$debug_id = $this->get_debug_id($response);
 
 		if (200 !== $code || empty($body['access_token'])) {
 			$error_msg = $body['error_description'] ?? 'Failed to obtain PayPal access token';
 
+			$this->log('Partner access token request failed', [
+				'mode'     => $test_mode ? 'sandbox' : 'live',
+				'status'   => $code,
+				'debug_id' => $debug_id,
+				'error'    => $error_msg,
+			]);
+
 			return new \WP_Error('token_error', $error_msg);
 		}
+
+		$this->log('Partner access token obtained', [
+			'mode'     => $test_mode ? 'sandbox' : 'live',
+			'debug_id' => $debug_id,
+		]);
 
 		$expires_in = isset($body['expires_in']) ? (int) $body['expires_in'] - 300 : 3300;
 		set_transient($cache_key, $body['access_token'], $expires_in);
@@ -216,7 +279,14 @@ class PayPal_Connect {
 		$return_url = $body['returnUrl'] ?? '';
 		$test_mode  = (bool) ($body['testMode'] ?? true);
 
+		$this->log('oauth/init received', [
+			'mode'       => $test_mode ? 'sandbox' : 'live',
+			'return_url' => $return_url,
+		]);
+
 		if (empty($return_url)) {
+			$this->log('oauth/init rejected: missing returnUrl');
+
 			return new \WP_REST_Response(
 				['error' => 'returnUrl is required'],
 				400
@@ -300,6 +370,11 @@ class PayPal_Connect {
 		);
 
 		if (is_wp_error($response)) {
+			$this->log('partner-referrals request failed (transport error)', [
+				'tracking_id' => $tracking_id,
+				'error'       => $response->get_error_message(),
+			]);
+
 			return new \WP_REST_Response(
 				['error' => 'Failed to create partner referral: ' . $response->get_error_message()],
 				500
@@ -308,9 +383,18 @@ class PayPal_Connect {
 
 		$resp_body = json_decode(wp_remote_retrieve_body($response), true);
 		$resp_code = wp_remote_retrieve_response_code($response);
+		$debug_id  = $this->get_debug_id($response);
 
 		if (201 !== $resp_code || empty($resp_body['links'])) {
 			$error_msg = $resp_body['message'] ?? 'Failed to create partner referral';
+
+			$this->log('partner-referrals returned non-201', [
+				'tracking_id' => $tracking_id,
+				'status'      => $resp_code,
+				'debug_id'    => $debug_id,
+				'error'       => $error_msg,
+				'details'     => $resp_body['details'] ?? null,
+			]);
 
 			return new \WP_REST_Response(
 				['error' => $error_msg],
@@ -330,11 +414,22 @@ class PayPal_Connect {
 		}
 
 		if (empty($action_url)) {
+			$this->log('partner-referrals missing action_url link', [
+				'tracking_id' => $tracking_id,
+				'debug_id'    => $debug_id,
+			]);
+
 			return new \WP_REST_Response(
 				['error' => 'No action URL returned from PayPal'],
 				500
 			);
 		}
+
+		$this->log('partner-referrals succeeded', [
+			'tracking_id' => $tracking_id,
+			'debug_id'    => $debug_id,
+			'mode'        => $test_mode ? 'sandbox' : 'live',
+		]);
 
 		return new \WP_REST_Response(
 			[
@@ -363,7 +458,15 @@ class PayPal_Connect {
 		$tracking_id = $body['trackingId'] ?? '';
 		$test_mode   = (bool) ($body['testMode'] ?? true);
 
+		$this->log('oauth/verify received', [
+			'merchant_id' => $merchant_id,
+			'tracking_id' => $tracking_id,
+			'mode'        => $test_mode ? 'sandbox' : 'live',
+		]);
+
 		if (empty($merchant_id) || empty($tracking_id)) {
+			$this->log('oauth/verify rejected: missing merchantId or trackingId');
+
 			return new \WP_REST_Response(
 				['error' => 'merchantId and trackingId are required'],
 				400
@@ -374,6 +477,10 @@ class PayPal_Connect {
 		$onboarding_data = get_transient('wu_pp_onboarding_' . $tracking_id);
 
 		if (! $onboarding_data) {
+			$this->log('oauth/verify rejected: invalid or expired tracking ID', [
+				'tracking_id' => $tracking_id,
+			]);
+
 			return new \WP_REST_Response(
 				['error' => 'Invalid or expired tracking ID'],
 				400
@@ -396,6 +503,11 @@ class PayPal_Connect {
 
 		if (empty($credentials['merchant_id'])) {
 			// Without partner merchant ID, record the onboarding event and return basic success.
+			$this->log('oauth/verify: partner merchant_id not configured, skipping merchant-integrations call', [
+				'merchant_id' => $merchant_id,
+				'mode'        => $test_mode ? 'sandbox' : 'live',
+			]);
+
 			PayPal_Merchants_Table::upsert_merchant($merchant_id, $tracking_id, $test_mode);
 
 			return new \WP_REST_Response(
@@ -421,6 +533,11 @@ class PayPal_Connect {
 		);
 
 		if (is_wp_error($response)) {
+			$this->log('merchant-integrations request failed (transport error)', [
+				'merchant_id' => $merchant_id,
+				'error'       => $response->get_error_message(),
+			]);
+
 			return new \WP_REST_Response(
 				['error' => 'Failed to verify merchant: ' . $response->get_error_message()],
 				500
@@ -429,9 +546,18 @@ class PayPal_Connect {
 
 		$resp_body = json_decode(wp_remote_retrieve_body($response), true);
 		$resp_code = wp_remote_retrieve_response_code($response);
+		$debug_id  = $this->get_debug_id($response);
 
 		if (200 !== $resp_code) {
 			$error_msg = $resp_body['message'] ?? 'Failed to verify merchant status';
+
+			$this->log('merchant-integrations returned non-200', [
+				'merchant_id' => $merchant_id,
+				'status'      => $resp_code,
+				'debug_id'    => $debug_id,
+				'error'       => $error_msg,
+				'details'     => $resp_body['details'] ?? null,
+			]);
 
 			return new \WP_REST_Response(
 				['error' => $error_msg],
@@ -442,6 +568,13 @@ class PayPal_Connect {
 		// Record the successful onboarding event.
 		$verified_merchant_id = $resp_body['merchant_id'] ?? $merchant_id;
 		$verified_tracking_id = $resp_body['tracking_id'] ?? $tracking_id;
+
+		$this->log('merchant-integrations succeeded', [
+			'merchant_id'         => $verified_merchant_id,
+			'debug_id'            => $debug_id,
+			'payments_receivable' => $resp_body['payments_receivable'] ?? false,
+			'email_confirmed'     => $resp_body['primary_email_confirmed'] ?? false,
+		]);
 
 		PayPal_Merchants_Table::upsert_merchant($verified_merchant_id, $verified_tracking_id, $test_mode);
 
@@ -475,6 +608,10 @@ class PayPal_Connect {
 		$body      = $request->get_json_params();
 		$test_mode = (bool) ($body['testMode'] ?? true);
 
+		$this->log('partner-token received', [
+			'mode' => $test_mode ? 'sandbox' : 'live',
+		]);
+
 		$access_token = $this->get_partner_access_token($test_mode);
 
 		if (is_wp_error($access_token)) {
@@ -485,6 +622,10 @@ class PayPal_Connect {
 		}
 
 		$credentials = $this->get_partner_credentials($test_mode);
+
+		$this->log('partner-token issued', [
+			'mode' => $test_mode ? 'sandbox' : 'live',
+		]);
 
 		return new \WP_REST_Response(
 			[
@@ -542,18 +683,23 @@ class PayPal_Connect {
 		$test_mode   = (bool) ($body['testMode'] ?? true);
 		$mode        = $test_mode ? 'sandbox' : 'live';
 
+		$this->log('deauthorize received', [
+			'site_url'    => $site_url,
+			'merchant_id' => $merchant_id ?: 'unknown',
+			'mode'        => $mode,
+		]);
+
 		// Record the disconnect event in the analytics table when a merchant ID is provided.
 		if ( ! empty($merchant_id)) {
 			PayPal_Merchants_Table::mark_disconnected($merchant_id, $test_mode);
 		}
 
 		// Log the disconnect for auditing.
-		error_log(sprintf(
-			'[PayPal Connect] Site disconnected: %s (merchant: %s, mode: %s)',
-			$site_url,
-			$merchant_id ?: 'unknown',
-			$mode
-		));
+		$this->log('Site disconnected', [
+			'site_url'    => $site_url,
+			'merchant_id' => $merchant_id ?: 'unknown',
+			'mode'        => $mode,
+		]);
 
 		return new \WP_REST_Response(
 			['success' => true],
