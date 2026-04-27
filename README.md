@@ -1,5 +1,7 @@
 ## WP Update Server Plugin
 
+[![Download Plugin Now](https://img.shields.io/github/v/release/Ultimate-Multisite/ultimate-update-server-plugin?style=for-the-badge&label=Download+Plugin+Now&color=0073aa)](https://github.com/Ultimate-Multisite/ultimate-update-server-plugin/releases/latest/download/ultimate-update-server-plugin.zip) &nbsp; Upload the zip to WordPress like any other plugin
+
 This project creates an update server to enable automatic updates for WordPress plugins which are Woocommerce downloadable products.
 
 ## Requires
