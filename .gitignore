@@ -1,6 +1,6 @@
-vendor/yahnis-elsts/cache/*
-vendor/yahnis-elsts/logs/request.log
+/vendor/
 .agents/loop-state/
 
 # AI DevOps local config
 .aidevops.json
+.opencode/
