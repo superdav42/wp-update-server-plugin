@@ -22,7 +22,10 @@
         "phpstan/extension-installer": "^1.1"
     },
     "scripts": {
-        "test": "php tests/product-versions-remote-download-regression.php"
+        "test": [
+            "php tests/downloads-page-woocommerce-guard-regression.php",
+            "php tests/product-versions-remote-download-regression.php"
+        ]
     },
     "config": {
         "allow-plugins": {

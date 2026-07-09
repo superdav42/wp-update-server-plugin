@@ -53,7 +53,7 @@ class Downloads_Page {
 	 */
 	public function enqueue_assets(): void {
 
-		if ( ! is_account_page()) {
+		if ( ! function_exists('is_account_page') || ! \is_account_page()) {
 			return;
 		}
 
