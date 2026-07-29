@@ -24,7 +24,8 @@
     "scripts": {
         "test": [
             "php tests/downloads-page-woocommerce-guard-regression.php",
-            "php tests/product-versions-remote-download-regression.php"
+            "php tests/product-versions-remote-download-regression.php",
+            "php tests/release-notifier-direct-download-regression.php"
         ]
     },
     "config": {
