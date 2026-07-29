@@ -49,6 +49,17 @@ class Release_Notifier {
 	private $previous_downloads = [];
 
 	/**
+	 * Download IDs already handled during the current request.
+	 *
+	 * WooCommerce fires its download-path hook before it writes the product
+	 * meta. The meta hook below catches direct meta updates too, so remember
+	 * files handled by the WooCommerce hook to avoid scheduling twice.
+	 *
+	 * @var array<int,array<string,bool>>
+	 */
+	private $processed_downloads = [];
+
+	/**
 	 * Constructor.
 	 */
 	public function __construct() {
@@ -57,6 +68,13 @@ class Release_Notifier {
 
 		// Hook after download paths saved to detect new downloads.
 		add_action( 'woocommerce_process_product_file_download_paths', [ $this, 'detect_new_downloads' ], 10, 3 );
+
+		// Some release tooling updates _downloadable_files directly instead of
+		// saving a WC_Product. Capture the old file list before that update and
+		// notify after it has been persisted.
+		add_filter( 'update_post_metadata', [ $this, 'store_previous_downloads_before_meta_update' ], 10, 5 );
+		add_action( 'updated_post_meta', [ $this, 'detect_new_downloads_from_meta' ], 10, 4 );
+		add_action( 'added_post_meta', [ $this, 'detect_new_downloads_from_meta' ], 10, 4 );
 
 		// Register Action Scheduler hook.
 		add_action( self::BATCH_HOOK, [ $this, 'process_notification_batch' ], 10, 4 );
@@ -101,12 +119,31 @@ class Release_Notifier {
 			return;
 		}
 
-		// Get current downloads from database (before save).
-		$existing_product = wc_get_product( $product_id );
+		$this->previous_downloads[ $product_id ] = $this->get_download_ids_from_meta(
+			get_post_meta( $product_id, '_downloadable_files', true )
+		);
+	}
 
-		if ( $existing_product ) {
-			$this->previous_downloads[ $product_id ] = array_keys( $existing_product->get_downloads() );
+	/**
+	 * Capture download IDs before a direct product-meta update.
+	 *
+	 * @param mixed  $check      Short-circuit value for the metadata update.
+	 * @param int    $product_id Product ID.
+	 * @param string $meta_key   Metadata key being updated.
+	 * @param mixed  $meta_value New metadata value.
+	 * @param mixed  $prev_value Previous metadata value constraint.
+	 * @return mixed Unmodified short-circuit value.
+	 */
+	public function store_previous_downloads_before_meta_update( $check, int $product_id, string $meta_key, $meta_value, $prev_value ) {
+		if ( '_downloadable_files' !== $meta_key ) {
+			return $check;
 		}
+
+		$this->previous_downloads[ $product_id ] = $this->get_download_ids_from_meta(
+			get_post_meta( $product_id, '_downloadable_files', true )
+		);
+
+		return $check;
 	}
 
 	/**
@@ -120,9 +157,39 @@ class Release_Notifier {
 	public function detect_new_downloads( int $product_id, int $variation_id, array $downloads ): void {
 		// Use variation ID if set, otherwise product ID.
 		$actual_product_id = $variation_id > 0 ? $variation_id : $product_id;
+		$this->schedule_new_download_notifications( $actual_product_id, array_keys( $downloads ) );
+	}
 
-		$current_download_ids = array_keys( $downloads );
-		$previous_download_ids = $this->previous_downloads[ $actual_product_id ] ?? [];
+	/**
+	 * Detect download changes made outside WooCommerce's product data store.
+	 *
+	 * @param int    $meta_id    Metadata row ID.
+	 * @param int    $product_id Product ID.
+	 * @param string $meta_key   Metadata key that changed.
+	 * @param mixed  $meta_value New metadata value.
+	 * @return void
+	 */
+	public function detect_new_downloads_from_meta( int $meta_id, int $product_id, string $meta_key, $meta_value ): void {
+		if ( '_downloadable_files' !== $meta_key ) {
+			return;
+		}
+
+		$this->schedule_new_download_notifications(
+			$product_id,
+			$this->get_download_ids_from_meta( $meta_value )
+		);
+	}
+
+	/**
+	 * Schedule notification batches for newly added download files.
+	 *
+	 * @param int   $product_id           Product ID.
+	 * @param array $current_download_ids Current download file IDs.
+	 * @return void
+	 */
+	private function schedule_new_download_notifications( int $product_id, array $current_download_ids ): void {
+
+		$previous_download_ids = $this->previous_downloads[ $product_id ] ?? [];
 
 		// Find newly added downloads.
 		$new_download_ids = array_diff( $current_download_ids, $previous_download_ids );
@@ -131,25 +198,42 @@ class Release_Notifier {
 			return;
 		}
 
-		$product = wc_get_product( $actual_product_id );
+		$product = wc_get_product( $product_id );
 
 		if ( ! $product ) {
 			return;
 		}
 
-		// Determine version from the new download.
-		$version = $this->get_version_from_download( $product, reset( $new_download_ids ) );
+		foreach ( $new_download_ids as $download_id ) {
+			if ( isset( $this->processed_downloads[ $product_id ][ $download_id ] ) ) {
+				continue;
+			}
 
-		// Skip notifications for pre-release versions.
-		if ( Product_Versions::is_prerelease( $version ) ) {
-			return;
+			$this->processed_downloads[ $product_id ][ $download_id ] = true;
+
+			// Determine version from the new download.
+			$version = $this->get_version_from_download( $product, $download_id );
+
+			// Skip notifications for pre-release versions.
+			if ( Product_Versions::is_prerelease( $version ) ) {
+				continue;
+			}
+
+			$this->schedule_notifications( $product_id, $version );
 		}
 
-		// Schedule notification batch processing.
-		$this->schedule_notifications( $actual_product_id, $version );
-
 		// Clear version cache.
-		Product_Versions::clear_cache( $actual_product_id );
+		Product_Versions::clear_cache( $product_id );
+	}
+
+	/**
+	 * Extract download IDs from the stored WooCommerce metadata value.
+	 *
+	 * @param mixed $downloads Stored downloadable-files metadata.
+	 * @return array
+	 */
+	private function get_download_ids_from_meta( $downloads ): array {
+		return is_array( $downloads ) ? array_keys( $downloads ) : [];
 	}
 
 	/**
@@ -171,12 +255,9 @@ class Release_Notifier {
 		// Try to extract version from filename.
 		$name = $file->get_name();
 
-		// Match patterns like: plugin-name-1.2.3.zip or "Plugin Name - 1.2.3".
-		if ( preg_match( '/-v?(\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9.]+)?)\.zip$/i', $name, $matches ) ) {
-			return $matches[1];
-		}
-
-		if ( preg_match( '/ - (\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9.]+)?)$/i', $name, $matches ) ) {
+		// Match patterns like plugin-name-1.2.3.zip, "Plugin Name - 1.2.3",
+		// or "Plugin Name v1.2.3".
+		if ( preg_match( '/(?:^|[\s-])v?(\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9.]+)?)(?:\.zip)?$/i', $name, $matches ) ) {
 			return $matches[1];
 		}
 
