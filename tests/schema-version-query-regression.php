@@ -60,8 +60,49 @@ foreach ($manager_classes as $manager_class) {
 }
 
 $wpdb = new class() {
-	public function __call(string $name, array $arguments) {
-		throw new RuntimeException("Current schemas must not call wpdb::{$name}().");
+	public string $prefix = 'wp_';
+	public string $last_error = '';
+	public array $tables = [];
+	public bool $token_column_exists = false;
+	public bool $fail_alter = false;
+	public int $database_calls = 0;
+
+	public function get_charset_collate(): string {
+		return '';
+	}
+
+	public function prepare(string $query, string $value): string {
+		unset($query);
+
+		return $value;
+	}
+
+	public function get_var(string $table) {
+		++$this->database_calls;
+		$this->last_error = '';
+
+		return isset($this->tables[$table]) ? $table : null;
+	}
+
+	public function get_results(string $query): array {
+		++$this->database_calls;
+		$this->last_error = '';
+
+		return $this->token_column_exists ? [(object) ['Field' => 'token_value']] : [];
+	}
+
+	public function query(string $query) {
+		++$this->database_calls;
+
+		if ($this->fail_alter) {
+			$this->last_error = 'ALTER TABLE failed';
+			return false;
+		}
+
+		$this->last_error         = '';
+		$this->token_column_exists = true;
+
+		return 1;
 	}
 };
 
@@ -69,4 +110,35 @@ foreach ($table_managers as $callback) {
 	$callback();
 }
 
+assert_same(0, $wpdb->database_calls, 'current schemas must not perform database discovery');
+
+unset($schema_versions[\WP_Update_Server_Plugin\Stripe_Analytics_Table::SCHEMA_VERSION_OPTION]);
+$wpdb->tables[\WP_Update_Server_Plugin\Stripe_Analytics_Table::get_analytics_table()] = true;
+$wpdb->tables[\WP_Update_Server_Plugin\Stripe_Analytics_Table::get_accounts_table()]  = true;
+(new \WP_Update_Server_Plugin\Stripe_Analytics_Table())->maybe_create_tables();
+assert_same(
+	\WP_Update_Server_Plugin\Stripe_Analytics_Table::SCHEMA_VERSION,
+	$schema_versions[\WP_Update_Server_Plugin\Stripe_Analytics_Table::SCHEMA_VERSION_OPTION] ?? '',
+	'existing Stripe tables must persist the current schema version'
+);
+
+unset($schema_versions[\WP_Update_Server_Plugin\Composer_Token_Table::SCHEMA_VERSION_OPTION]);
+$wpdb->tables[\WP_Update_Server_Plugin\Composer_Token_Table::get_table_name()] = true;
+$wpdb->token_column_exists = false;
+$wpdb->fail_alter          = true;
+(new \WP_Update_Server_Plugin\Composer_Token_Table())->maybe_create_table();
+assert_same(
+	'',
+	$schema_versions[\WP_Update_Server_Plugin\Composer_Token_Table::SCHEMA_VERSION_OPTION] ?? '',
+	'a failed schema migration must leave the schema version unchanged'
+);
+
 fwrite(STDOUT, "Schema version query regression checks passed.\n");
+
+function assert_same($expected, $actual, string $message): void {
+	if ($expected !== $actual) {
+		throw new RuntimeException(
+			sprintf('%s (expected %s, got %s)', $message, var_export($expected, true), var_export($actual, true))
+		);
+	}
+}

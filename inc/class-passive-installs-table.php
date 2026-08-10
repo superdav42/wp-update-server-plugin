@@ -70,7 +70,7 @@ class Passive_Installs_Table {
 			)
 		);
 
-		if ($table_exists === $table_name) {
+		if ($table_exists === $table_name && '' === (string) $wpdb->last_error) {
 			update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
 			return;
 		}
@@ -98,7 +98,14 @@ class Passive_Installs_Table {
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 		dbDelta($sql);
-		update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
+		$schema_error = (string) $wpdb->last_error;
+		$table_exists = $wpdb->get_var(
+			$wpdb->prepare('SHOW TABLES LIKE %s', $table_name)
+		);
+
+		if ('' === $schema_error && '' === (string) $wpdb->last_error && $table_exists === $table_name) {
+			update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
+		}
 	}
 
 	/**
