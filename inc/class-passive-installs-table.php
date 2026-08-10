@@ -18,6 +18,8 @@ class Passive_Installs_Table {
 	 * @var string
 	 */
 	const TABLE_NAME = 'wu_passive_installs';
+	const SCHEMA_VERSION = '1.0.0';
+	const SCHEMA_VERSION_OPTION = 'wu_passive_installs_schema_version';
 
 	/**
 	 * Auto-purge records older than this many months.
@@ -52,6 +54,9 @@ class Passive_Installs_Table {
 	 * @return void
 	 */
 	public function maybe_create_table(): void {
+		if (self::SCHEMA_VERSION === (string) get_option(self::SCHEMA_VERSION_OPTION, '')) {
+			return;
+		}
 
 		global $wpdb;
 
@@ -66,6 +71,7 @@ class Passive_Installs_Table {
 		);
 
 		if ($table_exists === $table_name) {
+			update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
 			return;
 		}
 
@@ -92,6 +98,7 @@ class Passive_Installs_Table {
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 		dbDelta($sql);
+		update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
 	}
 
 	/**

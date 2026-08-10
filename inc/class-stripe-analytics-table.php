@@ -35,6 +35,8 @@ class Stripe_Analytics_Table {
 	 * @var string
 	 */
 	const ACCOUNTS_TABLE = 'wu_stripe_accounts';
+	const SCHEMA_VERSION = '1.0.0';
+	const SCHEMA_VERSION_OPTION = 'wu_stripe_analytics_schema_version';
 
 	/**
 	 * Constructor.
@@ -74,6 +76,9 @@ class Stripe_Analytics_Table {
 	 * @return void
 	 */
 	public function maybe_create_tables(): void {
+		if (self::SCHEMA_VERSION === (string) get_option(self::SCHEMA_VERSION_OPTION, '')) {
+			return;
+		}
 
 		global $wpdb;
 
@@ -137,6 +142,8 @@ class Stripe_Analytics_Table {
 
 			dbDelta($sql);
 		}
+
+		update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
 	}
 
 	/**

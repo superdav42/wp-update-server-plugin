@@ -17,6 +17,17 @@ class Telemetry_Table {
 	 * @var string
 	 */
 	const TABLE_NAME = 'wu_telemetry';
+	const SCHEMA_VERSION = '1.0.0';
+	const SCHEMA_VERSION_OPTION = 'wu_telemetry_schema_version';
+
+	/**
+	 * Return early on healthy requests and run discovery only after schema changes.
+	 *
+	 * @return bool
+	 */
+	private function schema_is_current(): bool {
+		return self::SCHEMA_VERSION === (string) get_option(self::SCHEMA_VERSION_OPTION, '');
+	}
 
 	/**
 	 * Constructor
@@ -44,6 +55,9 @@ class Telemetry_Table {
 	 * @return void
 	 */
 	public function maybe_create_table(): void {
+		if ($this->schema_is_current()) {
+			return;
+		}
 
 		global $wpdb;
 
@@ -59,6 +73,7 @@ class Telemetry_Table {
 		);
 
 		if ($table_exists === $table_name) {
+			update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
 			return;
 		}
 
@@ -78,6 +93,7 @@ class Telemetry_Table {
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 		dbDelta($sql);
+		update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
 	}
 
 	/**
