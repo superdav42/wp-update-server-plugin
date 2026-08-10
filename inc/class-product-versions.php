@@ -447,8 +447,8 @@ class Product_Versions {
 			return $matches[1];
 		}
 
-		// Match pattern from file name like "Plugin Name - 1.2.3"
-		if (preg_match('/ - (\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9.]+)?)$/i', $filename, $matches)) {
+		// Match display names like "Plugin Name - 1.2.3" or "Plugin Name v1.2.3".
+		if (preg_match('/(?:^|[\s-])v?(\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9.]+)?)$/i', $filename, $matches)) {
 			return $matches[1];
 		}
 
@@ -789,5 +789,28 @@ class Product_Versions {
 	public static function clear_cache(int $product_id): void {
 
 		self::delete_cached_value('versions_' . $product_id);
+
+		$product = wc_get_product($product_id);
+
+		if ( ! $product || ! $product->exists()) {
+			return;
+		}
+
+		foreach ($product->get_downloads() as $file_id => $file) {
+			$file_info = \WC_Download_Handler::parse_file_path($product->get_file_download_path($file_id));
+
+			if (empty($file_info['remote_file'])) {
+				continue;
+			}
+
+			$cache_key = self::get_remote_version_cache_key(
+				$product_id,
+				$file_id,
+				$file->get_name(),
+				$file_info['file_path']
+			);
+
+			self::delete_cached_value($cache_key);
+		}
 	}
 }

@@ -447,6 +447,11 @@ namespace {
 	$remote_url = 'https://github.com/Ultimate-Multisite/ultimate-update-server-plugin/issues/32';
 	$product    = new WC_Product(123, $remote_url);
 	$file       = new WC_Product_Download('Private Archive.zip');
+	$versioned_file = new WC_Product_Download('Ultimate Multisite: WooCommerce Integration v3.2.1');
+
+	reset_remote_test_state('success', true);
+	assert_true(['version' => '3.2.1'] === invoke_extract_version($product, $versioned_file), 'versioned display names expose package metadata');
+	assert_true(0 === count($GLOBALS['wu_http_calls']), 'versioned display names avoid remote archive inspection');
 
 	reset_remote_test_state('timeout', true);
 	assert_true(null === invoke_extract_version($product, $file), 'timeout errors fail closed');
@@ -508,6 +513,7 @@ namespace {
 
 	\WP_Update_Server_Plugin\Product_Versions::clear_cache(123);
 	assert_true( ! isset($GLOBALS['wu_test_object_cache'][$cache_group]['versions_123']), 'product cache invalidation deletes the grouped object-cache entry');
+	assert_true(empty($GLOBALS['wu_test_object_cache'][$cache_group]), 'product cache invalidation deletes remote metadata entries');
 
 	$GLOBALS['wu_using_ext_object_cache'] = false;
 	reset_remote_test_state('success', true);
@@ -523,6 +529,7 @@ namespace {
 
 	\WP_Update_Server_Plugin\Product_Versions::clear_cache(123);
 	assert_true( ! isset($GLOBALS['wu_test_transients'][$transient_key]), 'product cache invalidation deletes the transient fallback');
+	assert_true(empty($GLOBALS['wu_test_transients']), 'product cache invalidation deletes transient remote metadata entries');
 
 	fwrite(STDOUT, "Product_Versions remote archive regression checks passed.\n");
 }
