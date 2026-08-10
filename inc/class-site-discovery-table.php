@@ -19,6 +19,8 @@ class Site_Discovery_Table {
 	 * @var string
 	 */
 	const TABLE_NAME = 'wu_site_discovery';
+	const SCHEMA_VERSION = '1.0.0';
+	const SCHEMA_VERSION_OPTION = 'wu_site_discovery_schema_version';
 
 	/**
 	 * Constructor.
@@ -46,6 +48,9 @@ class Site_Discovery_Table {
 	 * @return void
 	 */
 	public function maybe_create_table(): void {
+		if ( self::SCHEMA_VERSION === (string) get_option( self::SCHEMA_VERSION_OPTION, '' ) ) {
+			return;
+		}
 
 		global $wpdb;
 
@@ -56,7 +61,8 @@ class Site_Discovery_Table {
 			$wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name )
 		);
 
-		if ( $table_exists === $table_name ) {
+		if ( $table_exists === $table_name && '' === (string) $wpdb->last_error ) {
+			update_option( self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false );
 			return;
 		}
 
@@ -85,6 +91,12 @@ class Site_Discovery_Table {
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 		dbDelta( $sql );
+		$schema_error = (string) $wpdb->last_error;
+		$table_exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) );
+
+		if ( '' === $schema_error && '' === (string) $wpdb->last_error && $table_exists === $table_name ) {
+			update_option( self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false );
+		}
 	}
 
 	/**

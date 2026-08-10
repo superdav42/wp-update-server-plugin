@@ -17,6 +17,8 @@ class Composer_Token_Table {
 	 * @var string
 	 */
 	const TABLE_NAME = 'wu_composer_tokens';
+	const SCHEMA_VERSION = '1.1.0';
+	const SCHEMA_VERSION_OPTION = 'wu_composer_tokens_schema_version';
 
 	/**
 	 * Constructor
@@ -44,6 +46,9 @@ class Composer_Token_Table {
 	 * @return void
 	 */
 	public function maybe_create_table(): void {
+		if (self::SCHEMA_VERSION === (string) get_option(self::SCHEMA_VERSION_OPTION, '')) {
+			return;
+		}
 
 		global $wpdb;
 
@@ -61,8 +66,15 @@ class Composer_Token_Table {
 		if ($table_exists === $table_name) {
 			// Add token_value column if it doesn't exist (migration)
 			$column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table_name} LIKE 'token_value'");
-			if (empty($column_exists)) {
+			if (empty($column_exists) && '' === (string) $wpdb->last_error) {
 				$wpdb->query("ALTER TABLE {$table_name} ADD COLUMN token_value varchar(48) NOT NULL DEFAULT '' AFTER token_prefix");
+			}
+
+			$schema_error  = (string) $wpdb->last_error;
+			$column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table_name} LIKE 'token_value'");
+
+			if ('' === $schema_error && '' === (string) $wpdb->last_error && ! empty($column_exists)) {
+				update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
 			}
 			return;
 		}
@@ -85,6 +97,22 @@ class Composer_Token_Table {
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
 		dbDelta($sql);
+		$schema_error  = (string) $wpdb->last_error;
+		$table_exists  = $wpdb->get_var(
+			$wpdb->prepare('SHOW TABLES LIKE %s', $table_name)
+		);
+		$table_error   = (string) $wpdb->last_error;
+		$column_exists = $wpdb->get_results("SHOW COLUMNS FROM {$table_name} LIKE 'token_value'");
+
+		if (
+			'' === $schema_error
+			&& '' === $table_error
+			&& '' === (string) $wpdb->last_error
+			&& $table_exists === $table_name
+			&& ! empty($column_exists)
+		) {
+			update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
+		}
 	}
 
 	/**

@@ -35,6 +35,8 @@ class Stripe_Analytics_Table {
 	 * @var string
 	 */
 	const ACCOUNTS_TABLE = 'wu_stripe_accounts';
+	const SCHEMA_VERSION = '1.0.0';
+	const SCHEMA_VERSION_OPTION = 'wu_stripe_analytics_schema_version';
 
 	/**
 	 * Constructor.
@@ -74,6 +76,9 @@ class Stripe_Analytics_Table {
 	 * @return void
 	 */
 	public function maybe_create_tables(): void {
+		if (self::SCHEMA_VERSION === (string) get_option(self::SCHEMA_VERSION_OPTION, '')) {
+			return;
+		}
 
 		global $wpdb;
 
@@ -84,16 +89,22 @@ class Stripe_Analytics_Table {
 		$analytics_exists = $wpdb->get_var(
 			$wpdb->prepare('SHOW TABLES LIKE %s', $analytics_table)
 		);
+		$analytics_error = (string) $wpdb->last_error;
 
 		$accounts_exists = $wpdb->get_var(
 			$wpdb->prepare('SHOW TABLES LIKE %s', $accounts_table)
 		);
+		$accounts_error = (string) $wpdb->last_error;
 
 		if ($analytics_exists === $analytics_table && $accounts_exists === $accounts_table) {
+			if ('' === $analytics_error && '' === $accounts_error) {
+				update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
+			}
 			return;
 		}
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		$schema_error = '';
 
 		if ($analytics_exists !== $analytics_table) {
 			$sql = "CREATE TABLE {$analytics_table} (
@@ -113,6 +124,7 @@ class Stripe_Analytics_Table {
 			) {$charset_collate};";
 
 			dbDelta($sql);
+			$schema_error .= (string) $wpdb->last_error;
 		}
 
 		if ($accounts_exists !== $accounts_table) {
@@ -136,6 +148,21 @@ class Stripe_Analytics_Table {
 			) {$charset_collate};";
 
 			dbDelta($sql);
+			$schema_error .= (string) $wpdb->last_error;
+		}
+
+		$analytics_exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $analytics_table));
+		$analytics_error  = (string) $wpdb->last_error;
+		$accounts_exists  = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $accounts_table));
+
+		if (
+			'' === $schema_error
+			&& '' === $analytics_error
+			&& '' === (string) $wpdb->last_error
+			&& $analytics_exists === $analytics_table
+			&& $accounts_exists === $accounts_table
+		) {
+			update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
 		}
 	}
 

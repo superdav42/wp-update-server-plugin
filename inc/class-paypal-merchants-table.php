@@ -32,6 +32,8 @@ class PayPal_Merchants_Table {
 	 * @var string
 	 */
 	const ANALYTICS_TABLE = 'wu_paypal_analytics';
+	const SCHEMA_VERSION = '1.0.0';
+	const SCHEMA_VERSION_OPTION = 'wu_paypal_analytics_schema_version';
 
 	/**
 	 * Constructor.
@@ -71,6 +73,9 @@ class PayPal_Merchants_Table {
 	 * @return void
 	 */
 	public function maybe_create_tables(): void {
+		if (self::SCHEMA_VERSION === (string) get_option(self::SCHEMA_VERSION_OPTION, '')) {
+			return;
+		}
 
 		global $wpdb;
 
@@ -82,12 +87,22 @@ class PayPal_Merchants_Table {
 		$merchants_exists = $wpdb->get_var(
 			$wpdb->prepare('SHOW TABLES LIKE %s', $merchants_table)
 		);
+		$merchants_error = (string) $wpdb->last_error;
 
 		$analytics_exists = $wpdb->get_var(
 			$wpdb->prepare('SHOW TABLES LIKE %s', $analytics_table)
 		);
+		$analytics_error = (string) $wpdb->last_error;
+
+		if ($merchants_exists === $merchants_table && $analytics_exists === $analytics_table) {
+			if ('' === $merchants_error && '' === $analytics_error) {
+				update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
+			}
+			return;
+		}
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+		$schema_error = '';
 
 		if ($merchants_exists !== $merchants_table) {
 			$sql = "CREATE TABLE {$merchants_table} (
@@ -108,6 +123,7 @@ class PayPal_Merchants_Table {
 			) {$charset_collate};";
 
 			dbDelta($sql);
+			$schema_error .= (string) $wpdb->last_error;
 		}
 
 		if ($analytics_exists !== $analytics_table) {
@@ -125,6 +141,21 @@ class PayPal_Merchants_Table {
 			) {$charset_collate};";
 
 			dbDelta($sql);
+			$schema_error .= (string) $wpdb->last_error;
+		}
+
+		$merchants_exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $merchants_table));
+		$merchants_error  = (string) $wpdb->last_error;
+		$analytics_exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $analytics_table));
+
+		if (
+			'' === $schema_error
+			&& '' === $merchants_error
+			&& '' === (string) $wpdb->last_error
+			&& $merchants_exists === $merchants_table
+			&& $analytics_exists === $analytics_table
+		) {
+			update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false);
 		}
 	}
 
