@@ -56,6 +56,13 @@ class Product_Versions {
 	const REMOTE_VERSION_CACHE_EXPIRATION = DAY_IN_SECONDS;
 
 	/**
+	 * Cache expiration for failed remote archive inspections.
+	 *
+	 * @var int
+	 */
+	const REMOTE_VERSION_FAILURE_CACHE_EXPIRATION = HOUR_IN_SECONDS;
+
+	/**
 	 * Get all versions of a product by SKU.
 	 *
 	 * @param string $sku The product SKU.
@@ -86,11 +93,12 @@ class Product_Versions {
 			return [];
 		}
 
-		// Check cache
+		// Check persistent WordPress cache storage.
 		$cache_key = 'versions_' . $product_id;
-		$cached    = get_transient($cache_key);
+		$found     = false;
+		$cached    = self::get_cached_value($cache_key, $found);
 
-		if ($cached !== false) {
+		if ($found && is_array($cached)) {
 			return $cached;
 		}
 
@@ -120,8 +128,8 @@ class Product_Versions {
 			return version_compare($b['version'], $a['version']);
 		});
 
-		// Cache the results
-		set_transient($cache_key, $versions, self::CACHE_EXPIRATION);
+		// Cache the results, including an empty result, to avoid repeated inspection.
+		self::set_cached_value($cache_key, $versions, self::CACHE_EXPIRATION);
 
 		return $versions;
 	}
@@ -156,9 +164,10 @@ class Product_Versions {
 				$file->get_name(),
 				$filepath
 			);
-			$cached_version_info = self::get_cached_remote_version_info($remote_cache_key);
+			$cache_found         = false;
+			$cached_version_info = self::get_cached_remote_version_info($remote_cache_key, $cache_found);
 
-			if ($cached_version_info) {
+			if ($cache_found) {
 				return $cached_version_info;
 			}
 
@@ -166,6 +175,8 @@ class Product_Versions {
 			$tmp = self::download_remote_archive_for_inspection($filepath, $file->get_name());
 
 			if (null === $tmp) {
+				self::set_cached_remote_version_info($remote_cache_key, null);
+
 				return null;
 			}
 
@@ -174,6 +185,10 @@ class Product_Versions {
 
 		try {
 			if ( ! is_file($filepath) || ! is_readable($filepath)) {
+				if ($remote_cache_key) {
+					self::set_cached_remote_version_info($remote_cache_key, null);
+				}
+
 				return null;
 			}
 
@@ -184,31 +199,36 @@ class Product_Versions {
 			$version_info = ['version' => $metadata['version'] ?? '0.0.0'];
 
 			if ($remote_cache_key) {
-				set_transient($remote_cache_key, $version_info, self::REMOTE_VERSION_CACHE_EXPIRATION);
+				self::set_cached_remote_version_info($remote_cache_key, $version_info);
 			}
 
 			return $version_info;
 		} catch (\Throwable $e) {
 			// Fallback to filename extraction
 			$version = self::extract_version_from_filename($file->get_name());
+			$version_info = $version ? ['version' => $version] : null;
 
-			return $version ? ['version' => $version] : null;
+			if ($remote_cache_key) {
+				self::set_cached_remote_version_info($remote_cache_key, $version_info);
+			}
+
+			return $version_info;
 		} finally {
 			self::delete_temporary_archive($tmp);
 		}
 	}
 
 	/**
-	 * Build a privacy-safe transient key for remote archive metadata.
+	 * Build a privacy-safe object-cache key for remote archive metadata.
 	 *
 	 * The raw URL may contain signed download credentials, so only a hash is used
-	 * in the transient name.
+	 * in the cache key.
 	 *
 	 * @param int    $product_id The product ID.
 	 * @param string $file_id    The WooCommerce download file ID.
 	 * @param string $file_name  The WooCommerce download file name.
 	 * @param string $url        The remote archive URL.
-	 * @return string The transient cache key.
+	 * @return string The object-cache key.
 	 */
 	private static function get_remote_version_cache_key(int $product_id, string $file_id, string $file_name, string $url): string {
 
@@ -220,18 +240,114 @@ class Product_Versions {
 	/**
 	 * Retrieve cached remote version metadata if it has the expected shape.
 	 *
-	 * @param string $cache_key The transient cache key.
-	 * @return array|null Cached version metadata or null when absent/invalid.
+	 * A cached null version is a negative cache hit. This prevents unavailable or
+	 * malformed archives from being downloaded again on every page request.
+	 *
+	 * @param string $cache_key The object-cache key.
+	 * @param bool   $found     Set to true when valid positive or negative cache data exists.
+	 * @return array|null Cached version metadata, or null for a miss/negative hit.
 	 */
-	private static function get_cached_remote_version_info(string $cache_key): ?array {
+	private static function get_cached_remote_version_info(string $cache_key, bool &$found): ?array {
 
-		$cached = get_transient($cache_key);
+		$found  = false;
+		$cached = self::get_cached_value($cache_key, $found);
 
-		if ( ! is_array($cached) || ! isset($cached['version']) || ! is_string($cached['version'])) {
+		if ( ! $found || ! is_array($cached) || ! array_key_exists('version', $cached)) {
+			$found = false;
+
+			return null;
+		}
+
+		if (null === $cached['version']) {
+			return null;
+		}
+
+		if ( ! is_string($cached['version'])) {
+			$found = false;
+
 			return null;
 		}
 
 		return ['version' => $cached['version']];
+	}
+
+	/**
+	 * Cache positive or negative remote archive inspection results.
+	 *
+	 * @param string     $cache_key   The object-cache key.
+	 * @param array|null $version_info Version metadata, or null when inspection failed.
+	 * @return void
+	 */
+	private static function set_cached_remote_version_info(string $cache_key, ?array $version_info): void {
+
+		$expiration = null === $version_info
+			? self::REMOTE_VERSION_FAILURE_CACHE_EXPIRATION
+			: self::REMOTE_VERSION_CACHE_EXPIRATION;
+
+		self::set_cached_value($cache_key, $version_info ?? ['version' => null], $expiration);
+	}
+
+	/**
+	 * Retrieve a value from persistent WordPress cache storage.
+	 *
+	 * A dedicated object-cache group is used when a persistent backend is active.
+	 * Transients provide cross-request persistence when WordPress uses its default
+	 * request-local object cache.
+	 *
+	 * @param string $cache_key The cache key.
+	 * @param bool   $found     Set to true when the cache key exists.
+	 * @return mixed Cached value, or false on a miss.
+	 */
+	private static function get_cached_value(string $cache_key, bool &$found) {
+
+		if (wp_using_ext_object_cache()) {
+			$object_cache_found = null;
+			$cached            = wp_cache_get($cache_key, self::CACHE_GROUP, false, $object_cache_found);
+			$found             = true === $object_cache_found;
+
+			return $cached;
+		}
+
+		$cached = get_transient(self::CACHE_GROUP . '_' . $cache_key);
+		$found  = false !== $cached;
+
+		return $cached;
+	}
+
+	/**
+	 * Store a value in persistent WordPress cache storage.
+	 *
+	 * @param string $cache_key The cache key.
+	 * @param mixed  $value     The value to cache.
+	 * @param int    $expiration Cache lifetime in seconds.
+	 * @return void
+	 */
+	private static function set_cached_value(string $cache_key, $value, int $expiration): void {
+
+		if (wp_using_ext_object_cache()) {
+			wp_cache_set($cache_key, $value, self::CACHE_GROUP, $expiration);
+
+			return;
+		}
+
+		set_transient(self::CACHE_GROUP . '_' . $cache_key, $value, $expiration);
+	}
+
+	/**
+	 * Delete a value from persistent WordPress cache storage.
+	 *
+	 * @param string $cache_key The cache key.
+	 * @return void
+	 */
+	private static function delete_cached_value(string $cache_key): void {
+
+		if (wp_using_ext_object_cache()) {
+			wp_cache_delete($cache_key, self::CACHE_GROUP);
+
+			return;
+		}
+
+		delete_transient(self::CACHE_GROUP . '_' . $cache_key);
 	}
 
 	/**
@@ -331,8 +447,8 @@ class Product_Versions {
 			return $matches[1];
 		}
 
-		// Match pattern from file name like "Plugin Name - 1.2.3"
-		if (preg_match('/ - (\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9.]+)?)$/i', $filename, $matches)) {
+		// Match display names like "Plugin Name - 1.2.3" or "Plugin Name v1.2.3".
+		if (preg_match('/(?:^|[\s-])v?(\d+\.\d+(?:\.\d+)?(?:-[a-zA-Z0-9.]+)?)$/i', $filename, $matches)) {
 			return $matches[1];
 		}
 
@@ -672,6 +788,29 @@ class Product_Versions {
 	 */
 	public static function clear_cache(int $product_id): void {
 
-		delete_transient('versions_' . $product_id);
+		self::delete_cached_value('versions_' . $product_id);
+
+		$product = wc_get_product($product_id);
+
+		if ( ! $product || ! $product->exists()) {
+			return;
+		}
+
+		foreach ($product->get_downloads() as $file_id => $file) {
+			$file_info = \WC_Download_Handler::parse_file_path($product->get_file_download_path($file_id));
+
+			if (empty($file_info['remote_file'])) {
+				continue;
+			}
+
+			$cache_key = self::get_remote_version_cache_key(
+				$product_id,
+				$file_id,
+				$file->get_name(),
+				$file_info['file_path']
+			);
+
+			self::delete_cached_value($cache_key);
+		}
 	}
 }
