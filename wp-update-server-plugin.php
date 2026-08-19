@@ -3,6 +3,7 @@
 Plugin Name: WP Update Server Plugin
 Description: All the addon store stuff.
 Version: 1.0
+Tested up to: 7.1
 Author: David Stone
 */
 
