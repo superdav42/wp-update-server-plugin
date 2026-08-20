@@ -2,9 +2,13 @@
 /*
 Plugin Name: WP Update Server Plugin
 Description: All the addon store stuff.
-Version: 1.0
+Version: 1.0.1
 Author: David Stone
 */
+
+if ( ! defined( 'ULTIMATE_UPDATE_SERVER_PLUGIN_VERSION' ) ) {
+	define( 'ULTIMATE_UPDATE_SERVER_PLUGIN_VERSION', '1.0.1' );
+}
 
 define( 'WP_UPDATE_SERVER_PLUGIN_PATH', plugin_dir_path( __FILE__ ) );
 
